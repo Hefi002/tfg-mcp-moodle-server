@@ -1,0 +1,16 @@
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.11.1
+
+# Code Quality
+black>=23.7.0           # Formateo de código
+pylint>=2.17.5          # Linting
+flake8>=6.1.0           # Style guide
+mypy>=1.5.0             # Type checking
+isort>=5.12.0           # Ordenar imports
+
+# Development
+ipython>=8.14.0         # Better REPL
+pre-commit>=3.3.3       # Git hooks
