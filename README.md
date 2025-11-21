@@ -17,9 +17,9 @@ cd tfg-mcp-moodle-server
 
 # Crear entorn virtual
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
+source venv/bin/Activate.ps1  # Linux/Mac
 # o
-venv\Scripts\activate  # Windows
+.venv\Scripts\Activate.ps1  # Windows
 
 # Instal·lar dependències
 pip install -r requirements.txt
@@ -29,10 +29,18 @@ pip install -r requirements-dev.txt
 ### Moodle de desenvolupament
 ```bash
 # Iniciar Moodle
-docker-compose up -d
+.\start-moodle.bat # Windows
+# o
+./start-moodle.ps1  # Linux/Mac
+
+#Detindre Moodle
+.\stop-moodle.bat  # Windows
+# o
+./stop-moodle.ps1  # Linux/Mac
 
 # Accedir: http://localhost:8000
-# User: admin / Pass: Admin123!
+# User: admin / Pass: test
+# En cas de ser redirigit a una pàgina d'estadístiques, premer "Log in"
 ```
 
 ## 🧪 Testing
