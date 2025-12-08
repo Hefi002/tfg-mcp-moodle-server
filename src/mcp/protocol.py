@@ -21,12 +21,12 @@ class MoodleClient:
         self.api_endpoint = f"{self.base_url}/webservice/rest/server.php"
         self.client = httpx.AsyncClient(timeout=30.0)
 
-    async def call_function(
+    async def _call_function(
             self,
             function_name: str,
             **params: Any
     ) -> dict[str, Any] | list[dict[str, Any]]:
-        """Call a Moodle web service function.
+        """Call a Moodle web service function (internal use only).
 
         Args:
             function_name: Name of the Moodle web service function
@@ -78,7 +78,7 @@ class MoodleClient:
         Returns:
             List of course dictionaries
         """
-        result = await self.call_function("core_course_get_courses")
+        result = await self._call_function("core_course_get_courses")
         if isinstance(result, list):
             return result
         return []
