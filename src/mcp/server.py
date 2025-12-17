@@ -1,6 +1,5 @@
 """MCP Server for Moodle API integration."""
 import os
-import json
 from typing import Any
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
@@ -52,11 +51,18 @@ mcp = FastMCP(
 
 
 @mcp.tool()
-async def get_courses(ctx: Context[ServerSession, MoodleClient]) -> list[dict[str, Any]]:
-    """Get all courses from Moodle.
+async def get_courses(
+    ctx: Context[ServerSession, MoodleClient],
+    courseids: list[int] | None = None
+) -> list[dict[str, Any]]:
+    """Get courses from Moodle.
 
-    Returns a list of all courses available in the Moodle instance.
+    Returns a list of courses from the Moodle instance.
     Each course includes details like id, shortname, fullname, category, etc.
+
+    Args:
+        courseids: Optional list of course IDs to retrieve specific courses.
+                   If not provided or empty, returns all courses.
 
     Returns:
         List of course dictionaries with course information
@@ -64,10 +70,13 @@ async def get_courses(ctx: Context[ServerSession, MoodleClient]) -> list[dict[st
     # Access Moodle client from lifespan context
     client = ctx.request_context.lifespan_context
 
-    await ctx.info("Fetching courses from Moodle...")
+    if courseids:
+        await ctx.info(f"Fetching {len(courseids)} specific course(s) from Moodle...")
+    else:
+        await ctx.info("Fetching all courses from Moodle...")
 
     try:
-        courses = await client.get_courses()
+        courses = await client.get_courses(courseids)
 
         # Filter out the Docker Moodle default course (id=1) if you want
         # courses = [c for c in courses if c.get('id') != 1]
@@ -80,40 +89,96 @@ async def get_courses(ctx: Context[ServerSession, MoodleClient]) -> list[dict[st
         raise
 
 
-@mcp.resource("moodle://courses")
-async def list_courses_resource() -> str:
-    """Resource that provides a formatted list of all Moodle courses.
+@mcp.tool()
+async def create_courses(ctx: Context[ServerSession, MoodleClient], courses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Create one or more courses in Moodle.
+
+    Creates new courses in the Moodle instance. Each course must have at minimum:
+    - fullname: The full name of the course
+    - shortname: The short name/code of the course
+    - categoryid: The ID of the category where the course will be created
+
+    Args:
+        courses: List of course dictionaries to create. Each dictionary should contain
+                 at least fullname, shortname, and categoryid.
 
     Returns:
-        JSON string with course information
+        List of created course dictionaries with their assigned IDs
     """
-    # Note: Resources don't have access to context, so we need to create a client here
-    # This is a limitation - ideally we'd reuse the lifespan client
-    moodle_url = os.getenv("MOODLE_URL")
-    moodle_token = os.getenv("MOODLE_TOKEN")
+    # Access Moodle client from lifespan context
+    client = ctx.request_context.lifespan_context
 
-    if not moodle_url or not moodle_token:
-        raise RuntimeError("Moodle configuration not found")
-
-    client = MoodleClient(moodle_url, moodle_token)
+    await ctx.info(f"Creating {len(courses)} course(s) in Moodle...")
 
     try:
-        courses = await client.get_courses()
+        created_courses = await client.create_courses(courses)
 
-        # Format courses for better readability
-        formatted_courses = []
-        for course in courses:
-            formatted_courses.append({
-                "id": course.get("id"),
-                "shortname": course.get("shortname"),
-                "fullname": course.get("fullname"),
-                "category": course.get("categoryid"),
-                "visible": course.get("visible"),
-            })
+        await ctx.info(f"Successfully created {len(created_courses)} course(s)")
+        return created_courses
 
-        return json.dumps(formatted_courses, indent=2)
-    finally:
-        await client.close()
+    except Exception as e:
+        await ctx.error(f"Error creating courses: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def update_courses(ctx: Context[ServerSession, MoodleClient], courses: list[dict[str, Any]]) -> dict[str, Any]:
+    """Update one or more courses in Moodle.
+
+    Updates existing courses in the Moodle instance. Each course must have at minimum:
+    - id: The ID of the course to update
+    - And any fields to update (fullname, shortname, summary, etc.)
+
+    Args:
+        courses: List of course dictionaries to update. Each dictionary must contain
+                 the course id and any fields to be updated.
+
+    Returns:
+        Result dictionary (usually contains warnings array if any issues occurred)
+    """
+    # Access Moodle client from lifespan context
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Updating {len(courses)} course(s) in Moodle...")
+
+    try:
+        result = await client.update_courses(courses)
+
+        await ctx.info(f"Successfully updated {len(courses)} course(s)")
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error updating courses: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def delete_courses(ctx: Context[ServerSession, MoodleClient], courseids: list[int]) -> dict[str, Any]:
+    """Delete one or more courses from Moodle.
+
+    Deletes courses permanently from the Moodle instance.
+    Warning: This action cannot be undone!
+
+    Args:
+        courseids: List of course IDs to delete
+
+    Returns:
+        Result dictionary (usually contains warnings array if any issues occurred)
+    """
+    # Access Moodle client from lifespan context
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Deleting {len(courseids)} course(s) from Moodle...")
+
+    try:
+        result = await client.delete_courses(courseids)
+
+        await ctx.info(f"Successfully deleted {len(courseids)} course(s)")
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error deleting courses: {str(e)}")
+        raise
 
 
 def run_server():

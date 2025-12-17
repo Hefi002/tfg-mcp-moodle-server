@@ -4,11 +4,17 @@ Integration tests verify the interaction between MCP server components and Moodl
 Mock strategy: Mock only external dependencies (HTTP layer via httpx and AI agent via Context).
 Keep MoodleClient and MCP server logic to test integration.
 """
-import pytest
+# Standard library imports
 from unittest.mock import AsyncMock, patch, MagicMock
-import json
+
+# Third-party imports
+import pytest
 import httpx
+from mcp.server.fastmcp import Context
+
+# Local imports
 from src.mcp.protocol import MoodleClient
+from src.mcp.server import get_courses, mcp
 
 
 # ============================================================================
@@ -22,10 +28,10 @@ def mock_http_response(sample_courses):
     Returns:
         Mock response configured with sample course data
     """
-    mock_response = MagicMock()
-    mock_response.json.return_value = sample_courses
-    mock_response.raise_for_status = MagicMock()
-    return mock_response
+    mock = MagicMock()
+    mock.json.return_value = sample_courses
+    mock.raise_for_status = MagicMock()
+    return mock
 
 
 @pytest.fixture
@@ -39,8 +45,6 @@ def mock_context():
     Returns:
         Mock Context with request_context.lifespan_context set to real MoodleClient
     """
-    from mcp.server.fastmcp import Context
-    
     mock_ctx = MagicMock(spec=Context)
     mock_ctx.request_context = MagicMock()
     
@@ -59,27 +63,26 @@ def mock_context():
 
 
 # ============================================================================
-# TOOL TESTS - get_courses
+# CRUD OPERATIONS TESTS
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_get_courses_tool_integration(mock_context, mock_http_response, sample_courses):
-    """Test complete integration: MCP tool → MoodleClient → HTTP mock → response.
+async def test_read_tool_integration(mock_context, mock_http_response, sample_courses):
+    """Test complete integration for READ operations (GET).
     
     This tests the full flow:
-    1. MCP tool (get_courses) is called with context
-    2. Tool calls real MoodleClient.get_courses()
+    1. MCP tool is called with context
+    2. Tool calls real MoodleClient method
     3. MoodleClient makes HTTP call (mocked at httpx level)
     4. Response flows back through the layers
     
     Validates:
     - Tool executes without errors
-    - Returns expected course data
+    - Returns expected data structure
     - HTTP call is made with correct parameters
     - MoodleClient processes response correctly
+    - Context logging works properly
     """
-    from src.mcp.server import get_courses
-    
     # Mock only the HTTP layer (lowest level possible)
     with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
         mock_post.return_value = mock_http_response
@@ -104,24 +107,47 @@ async def test_get_courses_tool_integration(mock_context, mock_http_response, sa
         mock_context.info.assert_called()
 
 
+# TODO: Implement CREATE operation test
+# @pytest.mark.asyncio
+# async def test_create_tool_integration(mock_context):
+#     """Test complete integration for CREATE operations (POST)."""
+#     pass
+
+
+# TODO: Implement UPDATE operation test
+# @pytest.mark.asyncio
+# async def test_update_tool_integration(mock_context):
+#     """Test complete integration for UPDATE operations (PUT/PATCH)."""
+#     pass
+
+
+# TODO: Implement DELETE operation test
+# @pytest.mark.asyncio
+# async def test_delete_tool_integration(mock_context):
+#     """Test complete integration for DELETE operations."""
+#     pass
+
+
+# ============================================================================
+# MOODLE API ERROR TESTS
+# ============================================================================
+
 @pytest.mark.asyncio
-async def test_get_courses_tool_with_moodle_error(mock_context):
-    """Test get_courses tool handles Moodle API errors properly.
+async def test_tool_with_invalid_parameters(mock_context):
+    """Test tool handles Moodle API invalid parameter errors.
     
-    Simulates Moodle returning an error response (e.g., invalid token).
+    Simulates Moodle returning an invalid_parameter_exception error.
     
     Validates:
-    - Tool propagates Moodle API errors correctly
+    - Tool propagates Moodle API parameter validation errors correctly
     - Error is logged appropriately
-    - Exception is raised with correct message
+    - Exception is raised with correct message from Moodle
     """
-    from src.mcp.server import get_courses
-    
     # Mock HTTP to return Moodle error
     mock_error_response = MagicMock()
     mock_error_response.json.return_value = {
-        "exception": "invalid_token_exception",
-        "message": "Invalid token - token not found"
+        "exception": "invalid_parameter_exception",
+        "message": "Invalid parameter value detected"
     }
     mock_error_response.raise_for_status = MagicMock()
     
@@ -129,26 +155,42 @@ async def test_get_courses_tool_with_moodle_error(mock_context):
         mock_post.return_value = mock_error_response
         
         # Tool should raise ValueError (from MoodleClient._call_function)
-        with pytest.raises(ValueError, match="Invalid token"):
+        with pytest.raises(ValueError, match="Invalid parameter"):
             await get_courses(mock_context)
         
         # Verify error was logged
         mock_context.error.assert_called()
 
 
+# TODO: Implement invalid token test
+# @pytest.mark.asyncio
+# async def test_tool_with_invalid_token(mock_context):
+#     """Test tool handles invalid authentication token."""
+#     pass
+
+
+# TODO: Implement access exception test
+# @pytest.mark.asyncio
+# async def test_tool_with_access_exception(mock_context):
+#     """Test tool handles Moodle access exceptions."""
+#     pass
+
+
+# ============================================================================
+# HTTP/NETWORK ERROR TESTS
+# ============================================================================
+
 @pytest.mark.asyncio
-async def test_get_courses_tool_with_http_error(mock_context):
-    """Test get_courses tool handles HTTP/network errors properly.
+async def test_tool_with_http_error(mock_context):
+    """Test tool handles HTTP/network errors properly.
     
-    Simulates network failure or HTTP error (500, timeout, etc.).
+    Simulates network failure or HTTP error (500, timeout, connection refused).
     
     Validates:
     - Tool propagates HTTP errors correctly
     - Error is logged appropriately
-    - Exception is raised
+    - Exception type is preserved (httpx.HTTPError)
     """
-    from src.mcp.server import get_courses
-    
     # Mock HTTP to raise connection error
     with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
         mock_post.side_effect = httpx.HTTPError("Connection refused")
@@ -160,16 +202,19 @@ async def test_get_courses_tool_with_http_error(mock_context):
         mock_context.error.assert_called()
 
 
+# ============================================================================
+# BEHAVIOR TESTS
+# ============================================================================
+
 @pytest.mark.asyncio
-async def test_get_courses_tool_empty_response(mock_context):
-    """Test get_courses tool handles empty course list.
+async def test_tool_empty_response(mock_context):
+    """Test tool handles empty response correctly.
     
     Validates:
     - Tool returns empty list without errors
-    - Logging indicates success with 0 courses
+    - Logging indicates success with 0 items
+    - No exceptions are raised for valid empty responses
     """
-    from src.mcp.server import get_courses
-    
     mock_response = MagicMock()
     mock_response.json.return_value = []
     mock_response.raise_for_status = MagicMock()
@@ -184,111 +229,31 @@ async def test_get_courses_tool_empty_response(mock_context):
         mock_context.info.assert_called()
 
 
-# ============================================================================
-# RESOURCE TESTS - moodle://courses
-# ============================================================================
-
 @pytest.mark.asyncio
-async def test_list_courses_resource_integration(mock_http_response, sample_courses, test_env):
-    """Test complete integration for courses resource.
+async def test_multiple_tool_calls_same_context(mock_context, mock_http_response, sample_courses):
+    """Test multiple tool calls with the same context/client.
     
-    Resources create their own MoodleClient, so we test:
-    1. Resource creates MoodleClient with env vars
-    2. MoodleClient makes HTTP call (mocked)
-    3. Resource formats response as JSON
-    4. Client is properly closed
+    Simulates an AI agent making multiple calls in the same session.
     
     Validates:
-    - Resource returns valid JSON
-    - Data structure matches expected format
-    - All course fields are properly formatted
-    - Client cleanup happens
+    - Multiple calls work correctly
+    - Client state is maintained between calls
+    - Results are consistent (idempotency for GET operations)
+    - HTTP client is reused efficiently
     """
-    from src.mcp.server import list_courses_resource
-    
     with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
         mock_post.return_value = mock_http_response
         
-        # Mock aclose to verify cleanup
-        with patch('httpx.AsyncClient.aclose', new_callable=AsyncMock) as mock_close:
-            result = await list_courses_resource()
-            
-            # Verify result is valid JSON
-            courses_data = json.loads(result)
-            assert isinstance(courses_data, list)
-            assert len(courses_data) == len(sample_courses)
-            
-            # Verify data format (resource formats differently than raw API)
-            assert courses_data[0]["id"] == 1
-            assert courses_data[0]["shortname"] == "ASW"
-            assert courses_data[0]["fullname"] == "Aplicacions i Serveis Web"
-            assert courses_data[0]["category"] == 1
-            assert courses_data[0]["visible"] == 1
-            
-            # Verify HTTP call was made
-            assert mock_post.called
-            
-            # Verify client was closed
-            mock_close.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_list_courses_resource_with_moodle_error(test_env):
-    """Test list_courses_resource handles Moodle API errors properly.
-    
-    Validates:
-    - Resource raises exception on Moodle error
-    - Client is closed even on error (cleanup in finally block)
-    """
-    from src.mcp.server import list_courses_resource
-    
-    mock_error_response = MagicMock()
-    mock_error_response.json.return_value = {
-        "exception": "invalid_token_exception",
-        "message": "Invalid token - token not found"
-    }
-    mock_error_response.raise_for_status = MagicMock()
-    
-    with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_error_response
+        result1 = await get_courses(mock_context)
+        result2 = await get_courses(mock_context)
         
-        with patch('httpx.AsyncClient.aclose', new_callable=AsyncMock) as mock_close:
-            # Should raise ValueError from MoodleClient
-            with pytest.raises(ValueError, match="Invalid token"):
-                await list_courses_resource()
-            
-            # Verify cleanup happened even on error
-            mock_close.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_list_courses_resource_missing_env():
-    """Test list_courses_resource fails gracefully without env vars.
-    
-    Validates:
-    - Resource raises RuntimeError when env vars are missing
-    - Error message is clear
-    """
-    from src.mcp.server import list_courses_resource
-    
-    # Temporarily remove env vars
-    import os
-    old_url = os.environ.pop("MOODLE_URL", None)
-    old_token = os.environ.pop("MOODLE_TOKEN", None)
-    
-    try:
-        with pytest.raises(RuntimeError, match="Moodle configuration not found"):
-            await list_courses_resource()
-    finally:
-        # Restore env vars
-        if old_url:
-            os.environ["MOODLE_URL"] = old_url
-        if old_token:
-            os.environ["MOODLE_TOKEN"] = old_token
+        assert result1 == result2
+        assert len(result1) == len(sample_courses)
+        assert mock_post.call_count == 2
 
 
 # ============================================================================
-# SERVER REGISTRATION TESTS
+# MCP INFRASTRUCTURE TESTS
 # ============================================================================
 
 @pytest.mark.asyncio
@@ -296,12 +261,11 @@ async def test_server_tools_registration():
     """Test that tools are properly registered in the MCP server.
     
     Validates:
-    - get_courses tool is registered
-    - Tool has correct name and description
+    - Tools are registered and discoverable
+    - Tool has correct name
+    - Tool has proper description
     - Tool metadata is accessible
     """
-    from src.mcp.server import mcp
-    
     # Get registered tools
     tools = await mcp.list_tools()
     
@@ -312,59 +276,7 @@ async def test_server_tools_registration():
     assert get_courses_tool is not None, "get_courses tool not found"
     
     # Verify tool metadata
-    assert "Get all courses from Moodle" in get_courses_tool.description
-
-
-@pytest.mark.asyncio  
-async def test_server_resources_registration():
-    """Test that resources are properly registered in the MCP server.
-    
-    Validates:
-    - moodle://courses resource is registered
-    - Resource has correct URI
-    - Resource metadata is accessible
-    """
-    from src.mcp.server import mcp
-    
-    # Get registered resources
-    resources = await mcp.list_resources()
-    
-    assert len(resources) > 0, "No resources registered"
-    
-    # Find courses resource
-    courses_resource = next(
-        (r for r in resources if str(r.uri) == "moodle://courses"),
-        None
-    )
-    assert courses_resource is not None, "moodle://courses resource not found"
-
-
-# ============================================================================
-# INTEGRATION EDGE CASES
-# ============================================================================
-
-@pytest.mark.asyncio
-async def test_multiple_tool_calls_same_context(mock_context, mock_http_response, sample_courses):
-    """Test multiple tool calls with the same context/client.
-    
-    Simulates an AI agent making multiple calls in the same session.
-    
-    Validates:
-    - Multiple calls work correctly
-    - Client state is maintained between calls
-    - Results are consistent
-    """
-    from src.mcp.server import get_courses
-    
-    with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_http_response
-        
-        result1 = await get_courses(mock_context)
-        result2 = await get_courses(mock_context)
-        
-        assert result1 == result2
-        assert len(result1) == len(sample_courses)
-        assert mock_post.call_count == 2
+    assert "Get courses from Moodle" in get_courses_tool.description
 
 
 @pytest.mark.asyncio
@@ -377,11 +289,9 @@ async def test_context_lifespan_client_reuse(mock_http_response, sample_courses)
     Validates:
     - Client is created during lifespan
     - Same client instance is reused for multiple calls
-    - Client is properly closed on shutdown
+    - Client maintains state across calls
+    - Client cleanup is handled properly
     """
-    from src.mcp.server import get_courses
-    from mcp.server.fastmcp import Context
-    
     # Create a real client (will use mocked HTTP)
     real_client = MoodleClient(
         base_url="http://localhost:8000",
@@ -395,6 +305,7 @@ async def test_context_lifespan_client_reuse(mock_http_response, sample_courses)
     mock_ctx.info = AsyncMock()
     mock_ctx.error = AsyncMock()
     
+    # Mock HTTP for the calls
     with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
         mock_post.return_value = mock_http_response
         
@@ -404,8 +315,9 @@ async def test_context_lifespan_client_reuse(mock_http_response, sample_courses)
         
         # Both calls use the same client instance
         assert result1 == result2
+        assert mock_post.call_count == 2
         
-        # Cleanup
-        with patch('httpx.AsyncClient.aclose', new_callable=AsyncMock) as mock_close:
-            await real_client.close()
-            mock_close.assert_called_once()
+    # Test cleanup: mock aclose and verify it's called when client is closed
+    with patch.object(real_client.client, 'aclose', new_callable=AsyncMock) as mock_aclose:
+        await real_client.close()
+        mock_aclose.assert_called_once()

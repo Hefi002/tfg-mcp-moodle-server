@@ -26,7 +26,8 @@ class MoodleClient:
             function_name: str,
             **params: Any
     ) -> dict[str, Any] | list[dict[str, Any]]:
-        """Call a Moodle web service function (internal use only).
+        """Call a Moodle web service function (private use only).
+        Manages most error handling from api calls.
 
         Args:
             function_name: Name of the Moodle web service function
@@ -59,8 +60,12 @@ class MoodleClient:
 
             data = response.json()
 
-            # Check for Moodle API errors
-            if isinstance(data, dict) and "exception" in data:
+            # Check for unexpected response type
+            if not isinstance(data, (dict, list)):
+                logger.error(f"Unexpected response type: {type(data).__name__}")
+                raise ValueError(f"Moodle API returned unexpected type: {type(data).__name__}")
+            # Check for Moodle API error
+            elif "exception" in data:
                 error_msg = data.get("message", "Unknown error")
                 logger.error(f"Moodle API error: {error_msg}")
                 raise ValueError(f"Moodle API error: {error_msg}")
@@ -72,16 +77,80 @@ class MoodleClient:
             logger.error(f"HTTP error calling Moodle: {e}")
             raise
 
-    async def get_courses(self) -> list[dict[str, Any]]:
-        """Get all courses from Moodle.
+    async def get_courses(self, courseids: list[int] | None = None) -> list[dict[str, Any]]:
+        """Get courses from Moodle.
+
+        Args:
+            courseids: Optional list of course IDs to retrieve specific courses.
+                      If None or empty, returns all courses.
 
         Returns:
             List of course dictionaries
         """
-        result = await self._call_function("core_course_get_courses")
+        params = {}
+        if courseids:
+            params["options"] = {"ids": courseids}
+        
+        result = await self._call_function("core_course_get_courses", **params)
         if isinstance(result, list):
             return result
         return []
+
+    async def create_courses(self, courses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Create one or more courses in Moodle.
+
+        Args:
+            courses: List of course dictionaries with at least:
+                - fullname: Full course name
+                - shortname: Short course name
+                - categoryid: Category ID
+
+        Returns:
+            List of created course dictionaries with id
+        """
+        result = await self._call_function(
+            "core_course_create_courses",
+            courses=courses
+        )
+        if isinstance(result, list):
+            return result
+        return []
+
+    async def update_courses(self, courses: list[dict[str, Any]]) -> dict[str, Any]:
+        """Update one or more courses in Moodle.
+
+        Args:
+            courses: List of course dictionaries with at least:
+                - id: Course ID
+                - And any fields to update (fullname, shortname, etc.)
+
+        Returns:
+            Result dictionary (usually contains warnings if any)
+        """
+        result = await self._call_function(
+            "core_course_update_courses",
+            courses=courses
+        )
+        if isinstance(result, dict):
+            return result
+        return {}
+
+    async def delete_courses(self, courseids: list[int]) -> dict[str, Any]:
+        """Delete one or more courses from Moodle.
+
+        Args:
+            courseids: List of course IDs to delete
+
+        Returns:
+            Result dictionary (usually contains warnings if any)
+        """
+        result = await self._call_function(
+            "core_course_delete_courses",
+            courseids=courseids
+        )
+        if isinstance(result, dict):
+            return result
+        return {}
 
     async def close(self) -> None:
         """Close the HTTP client."""
