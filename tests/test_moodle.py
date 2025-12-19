@@ -224,13 +224,13 @@ async def test_get_courses_with_ids(moodle_client, sample_courses):
         
         # Verify result structure
         assert isinstance(result, list)
-        assert len(result) == 2
-        assert result[0]["id"] == 1
-        assert result[0]["shortname"] == "ASW"
+        assert len(result) == len(sample_courses)
+        assert result[0]["id"] == sample_courses[0]["id"]
+        assert result[0]["shortname"] == sample_courses[0]["shortname"]
 
 
 @pytest.mark.asyncio
-async def test_create_courses_minimal_fields(moodle_client):
+async def test_create_courses_minimal_fields(moodle_client, sample_courses_to_create):
     """Test create_courses method with minimum required fields.
     
     Tests the base case with only required fields:
@@ -243,14 +243,6 @@ async def test_create_courses_minimal_fields(moodle_client):
     - Passes courses parameter correctly
     - Returns list of created courses with assigned IDs
     """
-    courses_to_create = [
-        {
-            "fullname": "Introduction to Programming",
-            "shortname": "CS101",
-            "categoryid": 1
-        }
-    ]
-    
     created_courses = [
         {
             "id": 100,
@@ -261,12 +253,12 @@ async def test_create_courses_minimal_fields(moodle_client):
     with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
         mock_call.return_value = created_courses
         
-        result = await moodle_client.create_courses(courses_to_create)
+        result = await moodle_client.create_courses(sample_courses_to_create)
         
         # Verify correct function called with parameters
         mock_call.assert_called_once_with(
             "core_course_create_courses",
-            courses=courses_to_create
+            courses=sample_courses_to_create
         )
         
         # Verify result structure
@@ -277,7 +269,7 @@ async def test_create_courses_minimal_fields(moodle_client):
 
 
 @pytest.mark.asyncio
-async def test_update_courses_minimal_fields(moodle_client):
+async def test_update_courses_minimal_fields(moodle_client, sample_courses_to_update):
     """Test update_courses method with minimum required fields.
     
     Tests the base case with only required field:
@@ -290,24 +282,17 @@ async def test_update_courses_minimal_fields(moodle_client):
     - Passes courses parameter correctly
     - Returns result dictionary with warnings array
     """
-    courses_to_update = [
-        {
-            "id": 1,
-            "fullname": "Advanced Web Development"
-        }
-    ]
-    
     update_result = {"warnings": []}
     
     with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
         mock_call.return_value = update_result
         
-        result = await moodle_client.update_courses(courses_to_update)
+        result = await moodle_client.update_courses(sample_courses_to_update)
         
         # Verify correct function called with parameters
         mock_call.assert_called_once_with(
             "core_course_update_courses",
-            courses=courses_to_update
+            courses=sample_courses_to_update
         )
         
         # Verify result structure

@@ -75,59 +75,100 @@ def sample_courses():
 
 
 @pytest.fixture
-def sample_moodle_error():
-    """Provide sample Moodle API error response.
+def sample_courses_to_create():
+    """Provide sample course data for creation operations.
+    
+    Returns minimal required fields for creating a course via
+    core_course_create_courses API endpoint.
+    
+    Returns:
+        List with one course dictionary containing:
+        - fullname: Full course name
+        - shortname: Short course code
+        - categoryid: Category ID where course will be created
+    """
+    return [
+        {
+            "fullname": "Introduction to Programming",
+            "shortname": "CS101",
+            "categoryid": 1
+        }
+    ]
+
+
+@pytest.fixture
+def sample_courses_to_update():
+    """Provide sample course data for update operations.
+    
+    Returns minimal required fields for updating a course via
+    core_course_update_courses API endpoint.
+    
+    Returns:
+        List with one course dictionary containing:
+        - id: Course ID to update
+        - fullname: New full course name
+    """
+    return [
+        {
+            "id": 1,
+            "fullname": "Advanced Web Development"
+        }
+    ]
+
+
+@pytest.fixture
+def sample_moodle_invalid_parameter_error():
+    """Provide sample Moodle invalid parameter error response.
     
     Returns mock error data matching Moodle's error response structure
-    when an API call fails.
+    when an API call has invalid parameters.
     
     Returns:
         Dictionary with Moodle error fields:
-        - exception: Exception class name
+        - exception: invalid_parameter_exception
         - message: Human-readable error message
-        - errorcode: Moodle error code (optional)
+    """
+    return {
+        "exception": "invalid_parameter_exception",
+        "message": "Invalid parameter value detected"
+    }
+
+
+@pytest.fixture
+def sample_moodle_invalid_token_error():
+    """Provide sample Moodle invalid token error response.
+    
+    Returns mock error data matching Moodle's error response structure
+    when authentication token is invalid or not found.
+    
+    Returns:
+        Dictionary with Moodle error fields:
+        - exception: invalid_token_exception
+        - message: Human-readable error message
+        - errorcode: Moodle error code
     """
     return {
         "exception": "invalid_token_exception",
-        "message": "Invalid token - token not found",
+        "message": "Invalid token or token not found",
         "errorcode": "invalidtoken"
     }
 
 
 @pytest.fixture
-def sample_course_with_all_fields():
-    """Provide a complete course object with all possible fields.
+def sample_moodle_access_error():
+    """Provide sample Moodle access/permission error response.
     
-    Useful for testing field handling and data completeness.
-    Based on Moodle's core_course_get_courses response.
+    Returns mock error data matching Moodle's error response structure
+    when user lacks required permissions or capabilities.
     
     Returns:
-        Dictionary with all standard Moodle course fields
+        Dictionary with Moodle error fields:
+        - exception: required_capability_exception
+        - message: Human-readable error message
+        - errorcode: Moodle error code
     """
     return {
-        "id": 1,
-        "shortname": "ASW",
-        "fullname": "Aplicacions i Serveis Web",
-        "categoryid": 1,
-        "categorysortorder": 10000,
-        "summary": "Curs sobre aplicacions web modernes",
-        "summaryformat": 1,
-        "format": "topics",
-        "showgrades": 1,
-        "newsitems": 5,
-        "startdate": 1704067200,
-        "enddate": 1719792000,
-        "numsections": 10,
-        "maxbytes": 0,
-        "showreports": 0,
-        "visible": 1,
-        "groupmode": 0,
-        "groupmodeforce": 0,
-        "defaultgroupingid": 0,
-        "timecreated": 1704067200,
-        "timemodified": 1704067200,
-        "enablecompletion": 1,
-        "completionnotify": 0,
-        "lang": "ca",
-        "theme": "",
+        "exception": "required_capability_exception",
+        "message": "Sorry, but you do not currently have permissions to do that (View course information)",
+        "errorcode": "nopermissions"
     }

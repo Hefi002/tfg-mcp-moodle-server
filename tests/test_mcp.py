@@ -68,7 +68,7 @@ def mock_context():
 
 @pytest.mark.asyncio
 async def test_read_tool_integration(mock_context, mock_http_response, sample_courses):
-    """Test complete integration for READ operations (GET).
+    """Test complete integration for a READ operation (GET).
     
     This tests the full flow:
     1. MCP tool is called with context
@@ -92,8 +92,8 @@ async def test_read_tool_integration(mock_context, mock_http_response, sample_co
         # Verify result from full integration
         assert isinstance(result, list)
         assert len(result) == len(sample_courses)
-        assert result[0]["shortname"] == "ASW"
-        assert result[0]["fullname"] == "Aplicacions i Serveis Web"
+        assert result[0]["shortname"] == sample_courses[0]["shortname"]
+        assert result[0]["fullname"] == sample_courses[0]["fullname"]
         
         # Verify HTTP call was made correctly
         assert mock_post.called
@@ -107,25 +107,174 @@ async def test_read_tool_integration(mock_context, mock_http_response, sample_co
         mock_context.info.assert_called()
 
 
-# TODO: Implement CREATE operation test
-# @pytest.mark.asyncio
-# async def test_create_tool_integration(mock_context):
-#     """Test complete integration for CREATE operations (POST)."""
-#     pass
+@pytest.mark.asyncio
+async def test_create_tool_integration(mock_context, sample_courses_to_create):
+    """Test complete integration for a CREATE operation (POST).
+    
+    Tests the full flow for creating new courses:
+    1. MCP tool (create_courses) is called with course data
+    2. Tool calls real MoodleClient.create_courses()
+    3. MoodleClient makes HTTP POST call (mocked at httpx level)
+    4. Response with created course IDs flows back
+    
+    Validates:
+    - Tool executes without errors
+    - Returns created courses with assigned IDs
+    - HTTP call is made with correct parameters
+    - Course data is properly formatted for Moodle API
+    - Context logging works properly
+    """
+    from src.mcp.server import create_courses
+    
+    # Mock response with created courses (Moodle returns IDs)
+    mock_response = MagicMock()
+    mock_response.json.return_value = [
+        {
+            "id": 100,
+            "shortname": "CS101"
+        }
+    ]
+    mock_response.raise_for_status = MagicMock()
+    
+    with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+        
+        result = await create_courses(mock_context, courses=sample_courses_to_create)
+        
+        # Verify result from full integration
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["id"] == 100
+        assert result[0]["shortname"] == "CS101"
+        
+        # Verify HTTP call was made correctly
+        assert mock_post.called
+        call_args = mock_post.call_args
+        assert call_args[0][0] == "http://localhost:8000/webservice/rest/server.php"
+        assert call_args[1]['data']['wsfunction'] == "core_course_create_courses"
+        assert call_args[1]['data']['wstoken'] == "test_token_123"
+        
+        # Verify course data was sent
+        assert 'courses' in call_args[1]['data']
+        assert isinstance(call_args[1]['data']['courses'], list)
+        assert len(call_args[1]['data']['courses']) == len(sample_courses_to_create)
+        assert call_args[1]['data']['courses'][0]['fullname'] == sample_courses_to_create[0]['fullname']
+        assert call_args[1]['data']['courses'][0]['shortname'] == sample_courses_to_create[0]['shortname']
+        assert call_args[1]['data']['courses'][0]['categoryid'] == sample_courses_to_create[0]['categoryid']
+        
+        # Verify logging
+        mock_context.info.assert_called()
 
 
-# TODO: Implement UPDATE operation test
-# @pytest.mark.asyncio
-# async def test_update_tool_integration(mock_context):
-#     """Test complete integration for UPDATE operations (PUT/PATCH)."""
-#     pass
+@pytest.mark.asyncio
+async def test_update_tool_integration(mock_context, sample_courses_to_update):
+    """Test complete integration for an UPDATE operation (PUT/PATCH).
+    
+    Tests the full flow for updating existing courses:
+    1. MCP tool (update_courses) is called with course updates
+    2. Tool calls real MoodleClient.update_courses()
+    3. MoodleClient makes HTTP POST call (mocked at httpx level)
+    4. Response with update confirmation flows back
+    
+    Validates:
+    - Tool executes without errors
+    - Returns update result (typically warnings array)
+    - HTTP call is made with correct parameters
+    - Only specified fields are updated
+    - Context logging works properly
+    """
+    from src.mcp.server import update_courses
+    
+    # Mock response (Moodle update typically returns warnings array)
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "warnings": []
+    }
+    mock_response.raise_for_status = MagicMock()
+    
+    with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+        
+        result = await update_courses(mock_context, courses=sample_courses_to_update)
+        
+        # Verify result from full integration
+        assert isinstance(result, dict)
+        assert "warnings" in result
+        assert len(result["warnings"]) == 0
+        
+        # Verify HTTP call was made correctly
+        assert mock_post.called
+        call_args = mock_post.call_args
+        assert call_args[0][0] == "http://localhost:8000/webservice/rest/server.php"
+        assert call_args[1]['data']['wsfunction'] == "core_course_update_courses"
+        assert call_args[1]['data']['wstoken'] == "test_token_123"
+        
+        # Verify course data was sent
+        assert 'courses' in call_args[1]['data']
+        assert isinstance(call_args[1]['data']['courses'], list)
+        assert len(call_args[1]['data']['courses']) == len(sample_courses_to_update)
+        assert call_args[1]['data']['courses'][0]['id'] == sample_courses_to_update[0]['id']
+        assert call_args[1]['data']['courses'][0]['fullname'] == sample_courses_to_update[0]['fullname']
+        
+        # Verify logging
+        mock_context.info.assert_called()
 
 
-# TODO: Implement DELETE operation test
-# @pytest.mark.asyncio
-# async def test_delete_tool_integration(mock_context):
-#     """Test complete integration for DELETE operations."""
-#     pass
+@pytest.mark.asyncio
+async def test_delete_tool_integration(mock_context):
+    """Test complete integration for DELETE operations.
+    
+    Tests the full flow for deleting courses:
+    1. MCP tool (delete_courses) is called with course IDs
+    2. Tool calls real MoodleClient.delete_courses()
+    3. MoodleClient makes HTTP POST call (mocked at httpx level)
+    4. Response with deletion confirmation flows back
+    
+    Validates:
+    - Tool executes without errors
+    - Returns deletion result (typically warnings array)
+    - HTTP call is made with correct parameters
+    - Course IDs are properly sent to API
+    - Context logging works properly
+    """
+    from src.mcp.server import delete_courses
+    
+    # Course IDs to delete
+    courseids_to_delete = [1, 2]
+    
+    # Mock response (Moodle delete typically returns warnings array)
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "warnings": []
+    }
+    mock_response.raise_for_status = MagicMock()
+    
+    with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+        
+        result = await delete_courses(mock_context, courseids=courseids_to_delete)
+        
+        # Verify result from full integration
+        assert isinstance(result, dict)
+        assert "warnings" in result
+        assert len(result["warnings"]) == 0
+        
+        # Verify HTTP call was made correctly
+        assert mock_post.called
+        call_args = mock_post.call_args
+        assert call_args[0][0] == "http://localhost:8000/webservice/rest/server.php"
+        assert call_args[1]['data']['wsfunction'] == "core_course_delete_courses"
+        assert call_args[1]['data']['wstoken'] == "test_token_123"
+        
+        # Verify course IDs were sent
+        assert 'courseids' in call_args[1]['data']
+        assert isinstance(call_args[1]['data']['courseids'], list)
+        assert len(call_args[1]['data']['courseids']) == 2
+        assert call_args[1]['data']['courseids'][0] == 1
+        assert call_args[1]['data']['courseids'][1] == 2
+        
+        # Verify logging
+        mock_context.info.assert_called()
 
 
 # ============================================================================
@@ -133,7 +282,7 @@ async def test_read_tool_integration(mock_context, mock_http_response, sample_co
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_tool_with_invalid_parameters(mock_context):
+async def test_tool_with_invalid_parameters(mock_context, sample_moodle_invalid_parameter_error):
     """Test tool handles Moodle API invalid parameter errors.
     
     Simulates Moodle returning an invalid_parameter_exception error.
@@ -145,10 +294,7 @@ async def test_tool_with_invalid_parameters(mock_context):
     """
     # Mock HTTP to return Moodle error
     mock_error_response = MagicMock()
-    mock_error_response.json.return_value = {
-        "exception": "invalid_parameter_exception",
-        "message": "Invalid parameter value detected"
-    }
+    mock_error_response.json.return_value = sample_moodle_invalid_parameter_error
     mock_error_response.raise_for_status = MagicMock()
     
     with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
@@ -162,18 +308,62 @@ async def test_tool_with_invalid_parameters(mock_context):
         mock_context.error.assert_called()
 
 
-# TODO: Implement invalid token test
-# @pytest.mark.asyncio
-# async def test_tool_with_invalid_token(mock_context):
-#     """Test tool handles invalid authentication token."""
-#     pass
+@pytest.mark.asyncio
+async def test_tool_with_invalid_token(mock_context, sample_moodle_invalid_token_error):
+    """Test tool handles invalid authentication token.
+    
+    Simulates Moodle returning an invalid_token_exception error.
+    This occurs when the token doesn't exist or has been revoked.
+    
+    Validates:
+    - Tool propagates token authentication errors correctly
+    - Error is logged appropriately
+    - Exception is raised with correct message from Moodle
+    """
+    # Mock HTTP to return Moodle invalid token error
+    mock_error_response = MagicMock()
+    mock_error_response.json.return_value = sample_moodle_invalid_token_error
+    mock_error_response.raise_for_status = MagicMock()
+    
+    with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_error_response
+        
+        # Tool should raise ValueError (from MoodleClient._call_function)
+        with pytest.raises(ValueError, match="Invalid token"):
+            await get_courses(mock_context)
+        
+        # Verify error was logged
+        mock_context.error.assert_called()
 
 
-# TODO: Implement access exception test
-# @pytest.mark.asyncio
-# async def test_tool_with_access_exception(mock_context):
-#     """Test tool handles Moodle access exceptions."""
-#     pass
+@pytest.mark.asyncio
+async def test_tool_with_access_exception(mock_context, sample_moodle_access_error):
+    """Test tool handles Moodle access exceptions.
+    
+    Simulates Moodle returning access-related errors. This covers:
+    - require_login_exception: User not logged in
+    - required_capability_exception: User lacks required permissions
+    - moodle_exception with access context: User cannot access specific resource
+    
+    Validates:
+    - Tool propagates access/permission errors correctly
+    - Error is logged appropriately
+    - Exception is raised with correct message from Moodle
+    """
+    # Mock HTTP to return Moodle access error
+    mock_error_response = MagicMock()
+    mock_error_response.json.return_value = sample_moodle_access_error
+    mock_error_response.raise_for_status = MagicMock()
+    
+    with patch('httpx.AsyncClient.post', new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_error_response
+        
+        # Tool should raise ValueError (from MoodleClient._call_function)
+        with pytest.raises(ValueError, match="you do not currently have permissions"):
+            await get_courses(mock_context)
+        
+        # Verify error was logged
+        mock_context.error.assert_called()
 
 
 # ============================================================================
