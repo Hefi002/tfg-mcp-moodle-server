@@ -240,7 +240,7 @@ async def test_create_courses_minimal_fields(moodle_client, sample_courses_to_cr
     
     Validates:
     - Calls correct Moodle function
-    - Passes courses parameter correctly
+    - Passes courses parameter correctly (converted to dict)
     - Returns list of created courses with assigned IDs
     """
     created_courses = [
@@ -256,10 +256,18 @@ async def test_create_courses_minimal_fields(moodle_client, sample_courses_to_cr
         result = await moodle_client.create_courses(sample_courses_to_create)
         
         # Verify correct function called with parameters
-        mock_call.assert_called_once_with(
-            "core_course_create_courses",
-            courses=sample_courses_to_create
-        )
+        # Note: Course objects are converted to dicts by to_moodle_dict()
+        mock_call.assert_called_once()
+        call_args = mock_call.call_args
+        assert call_args[0][0] == "core_course_create_courses"
+        
+        # Verify courses were converted to dicts
+        courses_arg = call_args[1]['courses']
+        assert isinstance(courses_arg, list)
+        assert isinstance(courses_arg[0], dict)
+        assert courses_arg[0]['fullname'] == "Introduction to Programming"
+        assert courses_arg[0]['shortname'] == "CS101"
+        assert courses_arg[0]['categoryid'] == 1
         
         # Verify result structure
         assert isinstance(result, list)
@@ -279,7 +287,7 @@ async def test_update_courses_minimal_fields(moodle_client, sample_courses_to_up
     
     Validates:
     - Calls correct Moodle function
-    - Passes courses parameter correctly
+    - Passes courses parameter correctly (converted to dict)
     - Returns result dictionary with warnings array
     """
     update_result = {"warnings": []}
@@ -290,10 +298,17 @@ async def test_update_courses_minimal_fields(moodle_client, sample_courses_to_up
         result = await moodle_client.update_courses(sample_courses_to_update)
         
         # Verify correct function called with parameters
-        mock_call.assert_called_once_with(
-            "core_course_update_courses",
-            courses=sample_courses_to_update
-        )
+        # Note: CourseUpdate objects are converted to dicts by to_moodle_dict()
+        mock_call.assert_called_once()
+        call_args = mock_call.call_args
+        assert call_args[0][0] == "core_course_update_courses"
+        
+        # Verify courses were converted to dicts
+        courses_arg = call_args[1]['courses']
+        assert isinstance(courses_arg, list)
+        assert isinstance(courses_arg[0], dict)
+        assert courses_arg[0]['id'] == 1
+        assert courses_arg[0]['fullname'] == "Advanced Web Development"
         
         # Verify result structure
         assert isinstance(result, dict)

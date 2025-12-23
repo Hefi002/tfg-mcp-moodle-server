@@ -121,7 +121,7 @@ async def test_create_tool_integration(mock_context, sample_courses_to_create):
     - Tool executes without errors
     - Returns created courses with assigned IDs
     - HTTP call is made with correct parameters
-    - Course data is properly formatted for Moodle API
+    - Course data is properly formatted for Moodle API (converted to dict)
     - Context logging works properly
     """
     from src.mcp.server import create_courses
@@ -154,13 +154,17 @@ async def test_create_tool_integration(mock_context, sample_courses_to_create):
         assert call_args[1]['data']['wsfunction'] == "core_course_create_courses"
         assert call_args[1]['data']['wstoken'] == "test_token_123"
         
-        # Verify course data was sent
+        # Verify course data was sent (converted to dict by to_moodle_dict())
         assert 'courses' in call_args[1]['data']
         assert isinstance(call_args[1]['data']['courses'], list)
         assert len(call_args[1]['data']['courses']) == len(sample_courses_to_create)
-        assert call_args[1]['data']['courses'][0]['fullname'] == sample_courses_to_create[0]['fullname']
-        assert call_args[1]['data']['courses'][0]['shortname'] == sample_courses_to_create[0]['shortname']
-        assert call_args[1]['data']['courses'][0]['categoryid'] == sample_courses_to_create[0]['categoryid']
+        
+        # Verify the course was converted to dict with correct fields
+        course_dict = call_args[1]['data']['courses'][0]
+        assert isinstance(course_dict, dict)
+        assert course_dict['fullname'] == "Introduction to Programming"
+        assert course_dict['shortname'] == "CS101"
+        assert course_dict['categoryid'] == 1
         
         # Verify logging
         mock_context.info.assert_called()
@@ -180,7 +184,7 @@ async def test_update_tool_integration(mock_context, sample_courses_to_update):
     - Tool executes without errors
     - Returns update result (typically warnings array)
     - HTTP call is made with correct parameters
-    - Only specified fields are updated
+    - Only specified fields are updated (converted to dict)
     - Context logging works properly
     """
     from src.mcp.server import update_courses
@@ -209,12 +213,16 @@ async def test_update_tool_integration(mock_context, sample_courses_to_update):
         assert call_args[1]['data']['wsfunction'] == "core_course_update_courses"
         assert call_args[1]['data']['wstoken'] == "test_token_123"
         
-        # Verify course data was sent
+        # Verify course data was sent (converted to dict by to_moodle_dict())
         assert 'courses' in call_args[1]['data']
         assert isinstance(call_args[1]['data']['courses'], list)
         assert len(call_args[1]['data']['courses']) == len(sample_courses_to_update)
-        assert call_args[1]['data']['courses'][0]['id'] == sample_courses_to_update[0]['id']
-        assert call_args[1]['data']['courses'][0]['fullname'] == sample_courses_to_update[0]['fullname']
+        
+        # Verify the course update was converted to dict with correct fields
+        course_dict = call_args[1]['data']['courses'][0]
+        assert isinstance(course_dict, dict)
+        assert course_dict['id'] == 1
+        assert course_dict['fullname'] == "Advanced Web Development"
         
         # Verify logging
         mock_context.info.assert_called()

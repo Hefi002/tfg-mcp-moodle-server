@@ -78,21 +78,23 @@ def sample_courses():
 def sample_courses_to_create():
     """Provide sample course data for creation operations.
     
-    Returns minimal required fields for creating a course via
+    Returns Course model instances for creating courses via
     core_course_create_courses API endpoint.
     
     Returns:
-        List with one course dictionary containing:
+        List with one Course instance containing minimal required fields:
         - fullname: Full course name
         - shortname: Short course code
         - categoryid: Category ID where course will be created
     """
+    from src.mcp.models import Course
+    
     return [
-        {
-            "fullname": "Introduction to Programming",
-            "shortname": "CS101",
-            "categoryid": 1
-        }
+        Course(
+            fullname="Introduction to Programming",
+            shortname="CS101",
+            categoryid=1
+        )
     ]
 
 
@@ -100,19 +102,21 @@ def sample_courses_to_create():
 def sample_courses_to_update():
     """Provide sample course data for update operations.
     
-    Returns minimal required fields for updating a course via
+    Returns CourseUpdate model instances for updating courses via
     core_course_update_courses API endpoint.
     
     Returns:
-        List with one course dictionary containing:
+        List with one CourseUpdate instance containing:
         - id: Course ID to update
         - fullname: New full course name
     """
+    from src.mcp.models import CourseUpdate
+    
     return [
-        {
-            "id": 1,
-            "fullname": "Advanced Web Development"
-        }
+        CourseUpdate(
+            id=1,
+            fullname="Advanced Web Development"
+        )
     ]
 
 

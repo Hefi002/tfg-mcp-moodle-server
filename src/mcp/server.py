@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.session import ServerSession
 from .protocol import MoodleClient
+from .models import Course, CourseUpdate
 from .utils.logger import get_logger
 
 # Load environment variables
@@ -90,17 +91,14 @@ async def get_courses(
 
 
 @mcp.tool()
-async def create_courses(ctx: Context[ServerSession, MoodleClient], courses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+async def create_courses(
+    ctx: Context[ServerSession, MoodleClient], 
+    courses: list[Course]
+) -> list[dict[str, Any]]:
     """Create one or more courses in Moodle.
 
-    Creates new courses in the Moodle instance. Each course must have at minimum:
-    - fullname: The full name of the course
-    - shortname: The short name/code of the course
-    - categoryid: The ID of the category where the course will be created
-
     Args:
-        courses: List of course dictionaries to create. Each dictionary should contain
-                 at least fullname, shortname, and categoryid.
+        courses: List of Course objects to create
 
     Returns:
         List of created course dictionaries with their assigned IDs
@@ -122,16 +120,14 @@ async def create_courses(ctx: Context[ServerSession, MoodleClient], courses: lis
 
 
 @mcp.tool()
-async def update_courses(ctx: Context[ServerSession, MoodleClient], courses: list[dict[str, Any]]) -> dict[str, Any]:
+async def update_courses(
+    ctx: Context[ServerSession, MoodleClient], 
+    courses: list[CourseUpdate]
+) -> dict[str, Any]:
     """Update one or more courses in Moodle.
 
-    Updates existing courses in the Moodle instance. Each course must have at minimum:
-    - id: The ID of the course to update
-    - And any fields to update (fullname, shortname, summary, etc.)
-
     Args:
-        courses: List of course dictionaries to update. Each dictionary must contain
-                 the course id and any fields to be updated.
+        courses: List of CourseUpdate objects with course ID and fields to update
 
     Returns:
         Result dictionary (usually contains warnings array if any issues occurred)

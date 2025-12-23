@@ -2,6 +2,7 @@
 import httpx
 from typing import Any
 from .utils.logger import get_logger
+from .models import Course, CourseUpdate
 
 logger = get_logger(__name__)
 
@@ -96,40 +97,41 @@ class MoodleClient:
             return result
         return []
 
-    async def create_courses(self, courses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def create_courses(self, courses: list[Course]) -> list[dict[str, Any]]:
         """Create one or more courses in Moodle.
 
         Args:
-            courses: List of course dictionaries with at least:
-                - fullname: Full course name
-                - shortname: Short course name
-                - categoryid: Category ID
+            courses: List of Course objects to create
 
         Returns:
-            List of created course dictionaries with id
+            List of created course dictionaries with their assigned IDs
         """
+        # Convert Course models to dictionaries
+        courses_data = [course.to_moodle_dict() for course in courses]
+        
         result = await self._call_function(
             "core_course_create_courses",
-            courses=courses
+            courses=courses_data
         )
         if isinstance(result, list):
             return result
         return []
 
-    async def update_courses(self, courses: list[dict[str, Any]]) -> dict[str, Any]:
+    async def update_courses(self, courses: list[CourseUpdate]) -> dict[str, Any]:
         """Update one or more courses in Moodle.
 
         Args:
-            courses: List of course dictionaries with at least:
-                - id: Course ID
-                - And any fields to update (fullname, shortname, etc.)
+            courses: List of CourseUpdate objects with course ID and fields to update
 
         Returns:
             Result dictionary (usually contains warnings if any)
         """
+        # Convert CourseUpdate models to dictionaries
+        courses_data = [course.to_moodle_dict() for course in courses]
+        
         result = await self._call_function(
             "core_course_update_courses",
-            courses=courses
+            courses=courses_data
         )
         if isinstance(result, dict):
             return result
