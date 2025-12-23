@@ -7,6 +7,43 @@ from .models import Course, CourseUpdate
 logger = get_logger(__name__)
 
 
+def flatten_params(params: dict[str, Any], parent_key: str = '') -> dict[str, Any]:
+    """Flatten nested dictionary/list structures to Moodle API format.
+    
+    Converts nested structures like:
+        {"courses": [{"fullname": "Test", "categoryid": 1}]}
+    
+    To Moodle's expected format:
+        {"courses[0][fullname]": "Test", "courses[0][categoryid]": 1}
+    
+    Args:
+        params: Dictionary potentially containing nested dicts/lists
+        parent_key: Key prefix for recursion (used internally)
+    
+    Returns:
+        Flattened dictionary with Moodle-formatted keys
+    """
+    items = []
+    
+    for key, value in params.items():
+        new_key = f"{parent_key}[{key}]" if parent_key else key
+        
+        if isinstance(value, dict):
+            # Recursively flatten nested dictionaries
+            items.extend(flatten_params(value, new_key).items())
+        elif isinstance(value, list):
+            # Flatten lists with index notation
+            for i, item in enumerate(value):
+                if isinstance(item, dict):
+                    items.extend(flatten_params(item, f"{new_key}[{i}]").items())
+                else:
+                    items.append((f"{new_key}[{i}]", item))
+        else:
+            items.append((new_key, value))
+    
+    return dict(items)
+
+
 class MoodleClient:
     """Client for interacting with Moodle Web Services API."""
 
@@ -52,10 +89,14 @@ class MoodleClient:
         logger.debug(f"Calling Moodle function: {function_name}")
         logger.debug(f"Parameters: {params}")
 
+        # Flatten nested structures for Moodle's format
+        flattened_params = flatten_params(request_params)
+        logger.debug(f"Flattened parameters: {flattened_params}")
+
         try:
             response = await self.client.post(
                 self.api_endpoint,
-                data=request_params
+                data=flattened_params
             )
             response.raise_for_status()
 

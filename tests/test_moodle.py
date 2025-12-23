@@ -81,8 +81,8 @@ async def test_call_function_success(moodle_client, sample_courses):
 async def test_call_function_with_parameters(moodle_client):
     """Test internal API call with additional parameters.
     
-    Verifies that _call_function properly passes extra kwargs to Moodle API.
-    httpx handles the serialization of complex structures (lists, dicts) automatically.
+    Verifies that _call_function properly passes extra kwargs to Moodle API,
+    and that flatten_params converts nested structures to Moodle's expected format.
     """
     mock_response = MagicMock()
     mock_response.json.return_value = [{"id": 100, "shortname": "MATH101"}]
@@ -100,14 +100,19 @@ async def test_call_function_with_parameters(moodle_client):
         # Verify the function was called
         assert mock_post.called
         
-        # Verify the data dict contains our parameter with exact value
+        # Verify the data is flattened to Moodle format
         call_args = mock_post.call_args
-        assert call_args[1]['data']['courses'] == courses_param
+        flattened_data = call_args[1]['data']
+        
+        # Check flattened course parameters
+        assert flattened_data['courses[0][fullname]'] == "Mathematics 101"
+        assert flattened_data['courses[0][shortname]'] == "MATH101"
+        assert flattened_data['courses[0][categoryid]'] == 1
         
         # Verify standard parameters are also present
-        assert call_args[1]['data']['wstoken'] == "test_token_123"
-        assert call_args[1]['data']['wsfunction'] == "core_course_create_courses"
-        assert call_args[1]['data']['moodlewsrestformat'] == "json"
+        assert flattened_data['wstoken'] == "test_token_123"
+        assert flattened_data['wsfunction'] == "core_course_create_courses"
+        assert flattened_data['moodlewsrestformat'] == "json"
         
         # Verify result
         assert result == [{"id": 100, "shortname": "MATH101"}]
@@ -240,7 +245,7 @@ async def test_create_courses_minimal_fields(moodle_client, sample_courses_to_cr
     
     Validates:
     - Calls correct Moodle function
-    - Passes courses parameter correctly (converted to dict)
+    - Passes courses parameter correctly (converted to dict and flattened)
     - Returns list of created courses with assigned IDs
     """
     created_courses = [
@@ -255,13 +260,13 @@ async def test_create_courses_minimal_fields(moodle_client, sample_courses_to_cr
         
         result = await moodle_client.create_courses(sample_courses_to_create)
         
-        # Verify correct function called with parameters
-        # Note: Course objects are converted to dicts by to_moodle_dict()
+        # Verify correct function called
         mock_call.assert_called_once()
         call_args = mock_call.call_args
         assert call_args[0][0] == "core_course_create_courses"
         
-        # Verify courses were converted to dicts
+        # Verify courses were converted to dicts (by to_moodle_dict)
+        # Note: We're mocking _call_function, so flatten_params happens inside it
         courses_arg = call_args[1]['courses']
         assert isinstance(courses_arg, list)
         assert isinstance(courses_arg[0], dict)
@@ -287,7 +292,7 @@ async def test_update_courses_minimal_fields(moodle_client, sample_courses_to_up
     
     Validates:
     - Calls correct Moodle function
-    - Passes courses parameter correctly (converted to dict)
+    - Passes courses parameter correctly (converted to dict and flattened)
     - Returns result dictionary with warnings array
     """
     update_result = {"warnings": []}
@@ -297,13 +302,13 @@ async def test_update_courses_minimal_fields(moodle_client, sample_courses_to_up
         
         result = await moodle_client.update_courses(sample_courses_to_update)
         
-        # Verify correct function called with parameters
-        # Note: CourseUpdate objects are converted to dicts by to_moodle_dict()
+        # Verify correct function called
         mock_call.assert_called_once()
         call_args = mock_call.call_args
         assert call_args[0][0] == "core_course_update_courses"
         
-        # Verify courses were converted to dicts
+        # Verify courses were converted to dicts (by to_moodle_dict)
+        # Note: We're mocking _call_function, so flatten_params happens inside it
         courses_arg = call_args[1]['courses']
         assert isinstance(courses_arg, list)
         assert isinstance(courses_arg[0], dict)

@@ -121,7 +121,7 @@ async def test_create_tool_integration(mock_context, sample_courses_to_create):
     - Tool executes without errors
     - Returns created courses with assigned IDs
     - HTTP call is made with correct parameters
-    - Course data is properly formatted for Moodle API (converted to dict)
+    - Course data is properly flattened to Moodle API format
     - Context logging works properly
     """
     from src.mcp.server import create_courses
@@ -151,20 +151,16 @@ async def test_create_tool_integration(mock_context, sample_courses_to_create):
         assert mock_post.called
         call_args = mock_post.call_args
         assert call_args[0][0] == "http://localhost:8000/webservice/rest/server.php"
-        assert call_args[1]['data']['wsfunction'] == "core_course_create_courses"
-        assert call_args[1]['data']['wstoken'] == "test_token_123"
         
-        # Verify course data was sent (converted to dict by to_moodle_dict())
-        assert 'courses' in call_args[1]['data']
-        assert isinstance(call_args[1]['data']['courses'], list)
-        assert len(call_args[1]['data']['courses']) == len(sample_courses_to_create)
+        # Verify the data is flattened to Moodle format
+        flattened_data = call_args[1]['data']
+        assert flattened_data['wsfunction'] == "core_course_create_courses"
+        assert flattened_data['wstoken'] == "test_token_123"
         
-        # Verify the course was converted to dict with correct fields
-        course_dict = call_args[1]['data']['courses'][0]
-        assert isinstance(course_dict, dict)
-        assert course_dict['fullname'] == "Introduction to Programming"
-        assert course_dict['shortname'] == "CS101"
-        assert course_dict['categoryid'] == 1
+        # Verify course data was flattened correctly
+        assert flattened_data['courses[0][fullname]'] == "Introduction to Programming"
+        assert flattened_data['courses[0][shortname]'] == "CS101"
+        assert flattened_data['courses[0][categoryid]'] == 1
         
         # Verify logging
         mock_context.info.assert_called()
@@ -184,7 +180,7 @@ async def test_update_tool_integration(mock_context, sample_courses_to_update):
     - Tool executes without errors
     - Returns update result (typically warnings array)
     - HTTP call is made with correct parameters
-    - Only specified fields are updated (converted to dict)
+    - Course data is properly flattened to Moodle API format
     - Context logging works properly
     """
     from src.mcp.server import update_courses
@@ -210,19 +206,15 @@ async def test_update_tool_integration(mock_context, sample_courses_to_update):
         assert mock_post.called
         call_args = mock_post.call_args
         assert call_args[0][0] == "http://localhost:8000/webservice/rest/server.php"
-        assert call_args[1]['data']['wsfunction'] == "core_course_update_courses"
-        assert call_args[1]['data']['wstoken'] == "test_token_123"
         
-        # Verify course data was sent (converted to dict by to_moodle_dict())
-        assert 'courses' in call_args[1]['data']
-        assert isinstance(call_args[1]['data']['courses'], list)
-        assert len(call_args[1]['data']['courses']) == len(sample_courses_to_update)
+        # Verify the data is flattened to Moodle format
+        flattened_data = call_args[1]['data']
+        assert flattened_data['wsfunction'] == "core_course_update_courses"
+        assert flattened_data['wstoken'] == "test_token_123"
         
-        # Verify the course update was converted to dict with correct fields
-        course_dict = call_args[1]['data']['courses'][0]
-        assert isinstance(course_dict, dict)
-        assert course_dict['id'] == 1
-        assert course_dict['fullname'] == "Advanced Web Development"
+        # Verify course data was flattened correctly
+        assert flattened_data['courses[0][id]'] == 1
+        assert flattened_data['courses[0][fullname]'] == "Advanced Web Development"
         
         # Verify logging
         mock_context.info.assert_called()
@@ -242,7 +234,7 @@ async def test_delete_tool_integration(mock_context):
     - Tool executes without errors
     - Returns deletion result (typically warnings array)
     - HTTP call is made with correct parameters
-    - Course IDs are properly sent to API
+    - Course IDs are properly flattened to Moodle format
     - Context logging works properly
     """
     from src.mcp.server import delete_courses
@@ -271,15 +263,15 @@ async def test_delete_tool_integration(mock_context):
         assert mock_post.called
         call_args = mock_post.call_args
         assert call_args[0][0] == "http://localhost:8000/webservice/rest/server.php"
-        assert call_args[1]['data']['wsfunction'] == "core_course_delete_courses"
-        assert call_args[1]['data']['wstoken'] == "test_token_123"
         
-        # Verify course IDs were sent
-        assert 'courseids' in call_args[1]['data']
-        assert isinstance(call_args[1]['data']['courseids'], list)
-        assert len(call_args[1]['data']['courseids']) == 2
-        assert call_args[1]['data']['courseids'][0] == 1
-        assert call_args[1]['data']['courseids'][1] == 2
+        # Verify the data is flattened to Moodle format
+        flattened_data = call_args[1]['data']
+        assert flattened_data['wsfunction'] == "core_course_delete_courses"
+        assert flattened_data['wstoken'] == "test_token_123"
+        
+        # Verify course IDs were flattened correctly
+        assert flattened_data['courseids[0]'] == 1
+        assert flattened_data['courseids[1]'] == 2
         
         # Verify logging
         mock_context.info.assert_called()
