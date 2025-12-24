@@ -1,5 +1,5 @@
 """Pydantic models for Moodle API data structures."""
-from typing import Optional, Literal
+from typing import Optional, Literal, Any
 from pydantic import BaseModel, Field, field_validator
 
 # ============================================================================
@@ -195,4 +195,43 @@ class CourseUpdate(Course):
         default=None,
         gt=0,
         description="Category ID where the course will be created (must be > 0)"
+    )
+
+
+class CourseContentsOption(BaseModel):
+    """Options for filtering course contents (available since Moodle 2.9).
+    
+    All fields are optional. Only specify the filters you want to apply.
+    """
+    excludemodules: Optional[bool] = Field(
+        default=None,
+        description="Do not return modules, return only the sections structure"
+    )
+    excludecontents: Optional[bool] = Field(
+        default=None,
+        description="Do not return module contents (i.e: files inside a resource)"
+    )
+    includestealthmodules: Optional[bool] = Field(
+        default=None,
+        description="Return stealth modules for students in a special section (with id -1)"
+    )
+    sectionid: Optional[int] = Field(
+        default=None,
+        description="Return only this section by its ID"
+    )
+    sectionnumber: Optional[int] = Field(
+        default=None,
+        description="Return only this section by its number/order"
+    )
+    cmid: Optional[int] = Field(
+        default=None,
+        description="Return only this course module (activity) by its ID"
+    )
+    modname: Optional[str] = Field(
+        default=None,
+        description="Return only modules with this name, e.g.: 'forum', 'assign', 'quiz', 'resource'"
+    )
+    modid: Optional[int] = Field(
+        default=None,
+        description="Return only the module with this ID (to be used with modname)"
     )

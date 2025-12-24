@@ -205,7 +205,7 @@ async def test_multiple_calls(moodle_client, sample_courses):
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_get_courses_with_ids(moodle_client, sample_courses):
+async def test_get_courses(moodle_client, sample_courses):
     """Test get_courses method with specific course IDs.
     
     Validates:
@@ -235,7 +235,7 @@ async def test_get_courses_with_ids(moodle_client, sample_courses):
 
 
 @pytest.mark.asyncio
-async def test_create_courses_minimal_fields(moodle_client, sample_courses_to_create):
+async def test_create_courses(moodle_client, sample_courses_to_create):
     """Test create_courses method with minimum required fields.
     
     Tests the base case with only required fields:
@@ -282,7 +282,7 @@ async def test_create_courses_minimal_fields(moodle_client, sample_courses_to_cr
 
 
 @pytest.mark.asyncio
-async def test_update_courses_minimal_fields(moodle_client, sample_courses_to_update):
+async def test_update_courses(moodle_client, sample_courses_to_update):
     """Test update_courses method with minimum required fields.
     
     Tests the base case with only required field:
@@ -322,7 +322,7 @@ async def test_update_courses_minimal_fields(moodle_client, sample_courses_to_up
 
 
 @pytest.mark.asyncio
-async def test_delete_courses_single_id(moodle_client):
+async def test_delete_courses(moodle_client):
     """Test delete_courses method with single course ID.
     
     Tests the base case deleting one course.
@@ -350,3 +350,45 @@ async def test_delete_courses_single_id(moodle_client):
         assert isinstance(result, dict)
         assert "warnings" in result
         assert result["warnings"] == []
+
+
+@pytest.mark.asyncio
+async def test_get_course_contents(moodle_client):
+    """Test get_course_contents without options (base case).
+
+    Verifies:
+    - Calls the correct Moodle function with only courseid parameter
+    - Returns the list of sections as provided by the API
+    """
+    sample_course_contents = [
+        {
+            "id": 1,
+            "name": "Section 0",
+            "summary": "",
+            "modules": [
+                {"id": 10, "modname": "forum", "name": "General forum"}
+            ]
+        },
+        {
+            "id": 2,
+            "name": "Section 1",
+            "summary": "",
+            "modules": []
+        }
+    ]
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = sample_course_contents
+
+        result = await moodle_client.get_course_contents(1)
+
+        # Verify the function was called with only courseid
+        mock_call.assert_called_once_with(
+            "core_course_get_contents",
+            courseid=1
+        )
+
+        # Verify result structure
+        assert isinstance(result, list)
+        assert result == sample_course_contents
+

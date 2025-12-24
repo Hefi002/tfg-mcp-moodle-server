@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.session import ServerSession
 from .protocol import MoodleClient
-from .models import Course, CourseUpdate
+from .models import Course, CourseUpdate, CourseContentsOption
 from .utils.logger import get_logger
 
 # Load environment variables
@@ -66,7 +66,19 @@ async def get_courses(
                    If not provided or empty, returns all courses.
 
     Returns:
-        List of course dictionaries with course information
+        List of course dictionaries, each containing:
+        - id: Course ID
+        - shortname: Short course name
+        - fullname: Full course name
+        - categoryid: Category ID
+        - idnumber: Course identification number
+        - summary: Course description (HTML)
+        - summaryformat: Format of summary (1=HTML, 0=MOODLE, 2=PLAIN, 4=MARKDOWN)
+        - format: Course format (topics, weeks, etc.)
+        - visible: Course visibility (1=visible, 0=hidden)
+        - startdate: Course start timestamp
+        - enddate: Course end timestamp
+        - And many other fields...
     """
     # Access Moodle client from lifespan context
     client = ctx.request_context.lifespan_context
@@ -98,10 +110,26 @@ async def create_courses(
     """Create one or more courses in Moodle.
 
     Args:
-        courses: List of Course objects to create
+        courses: List of Course objects to create. Each Course must have:
+                Required fields:
+                - fullname: Full course name (e.g., "Advanced Mathematics 2024")
+                - shortname: Unique short name (e.g., "MAT-ADV-2024")
+                - categoryid: Category ID (must be > 0)
+                
+                Optional fields:
+                - idnumber: Course identification number
+                - summary: HTML description of the course
+                - summaryformat: Format (1=HTML, 0=MOODLE, 2=PLAIN, 4=MARKDOWN)
+                - format: Course format ("topics", "weeks", "social", etc.)
+                - visible: Visibility (1=visible, 0=hidden)
+                - startdate/enddate: Unix timestamps
+                - showgrades: Show grades (1=yes, 0=no)
+                - maxbytes: Max file size (0=no limit)
+                - groupmode: Group mode (0=no groups, 1=separate, 2=visible)
+                - And many other optional fields...
 
     Returns:
-        List of created course dictionaries with their assigned IDs
+        List of created course dictionaries with their assigned IDs and all fields
     """
     # Access Moodle client from lifespan context
     client = ctx.request_context.lifespan_context
@@ -127,7 +155,25 @@ async def update_courses(
     """Update one or more courses in Moodle.
 
     Args:
-        courses: List of CourseUpdate objects with course ID and fields to update
+        courses: List of CourseUpdate objects with course ID and fields to update.
+                Each CourseUpdate must have:
+                Required field:
+                - id: Course ID to update (must be > 0)
+                
+                Optional fields (only specify what you want to change):
+                - fullname: Full course name
+                - shortname: Unique short name
+                - categoryid: Category ID
+                - idnumber: Course identification number
+                - summary: HTML description
+                - summaryformat: Format (1=HTML, 0=MOODLE, 2=PLAIN, 4=MARKDOWN)
+                - format: Course format ("topics", "weeks", etc.)
+                - visible: Visibility (1=visible, 0=hidden)
+                - startdate/enddate: Unix timestamps
+                - showgrades: Show grades (1=yes, 0=no)
+                - maxbytes: Max file size
+                - groupmode: Group mode (0=no groups, 1=separate, 2=visible)
+                - And any other course field...
 
     Returns:
         Result dictionary (usually contains warnings array if any issues occurred)
@@ -156,10 +202,13 @@ async def delete_courses(ctx: Context[ServerSession, MoodleClient], courseids: l
     Warning: This action cannot be undone!
 
     Args:
-        courseids: List of course IDs to delete
+        courseids: List of course IDs to delete. Each ID must be a valid course ID
+                   that exists in the Moodle instance.
 
     Returns:
-        Result dictionary (usually contains warnings array if any issues occurred)
+        Result dictionary containing:
+        - warnings: Array of warning messages if any issues occurred during deletion
+                   (e.g., if a course ID doesn't exist or user lacks permissions)
     """
     # Access Moodle client from lifespan context
     client = ctx.request_context.lifespan_context
@@ -174,6 +223,52 @@ async def delete_courses(ctx: Context[ServerSession, MoodleClient], courseids: l
 
     except Exception as e:
         await ctx.error(f"Error deleting courses: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def get_course_contents(
+    ctx: Context[ServerSession, MoodleClient],
+    courseid: int,
+    options: CourseContentsOption | None = None
+) -> list[dict[str, Any]]:
+    """Get course contents (sections and modules) from Moodle.
+
+    Returns the complete course structure including sections, modules (activities),
+    and optionally their contents (files, descriptions, etc.).
+
+    Args:
+        courseid: Course ID to retrieve contents from
+        options: Optional CourseContentsOption object to filter results.
+                Available filters:
+                - excludemodules: Don't return modules, only sections
+                - excludecontents: Don't return module contents (files)
+                - includestealthmodules: Include stealth modules for students
+                - sectionid: Return only specific section by ID
+                - sectionnumber: Return only section by its number/order
+                - cmid: Return only specific course module by ID
+                - modname: Return only modules of specific type (e.g., "forum", "assign")
+                - modid: Return only module with specific ID (use with modname)
+
+    Returns:
+        List of section dictionaries, each containing:
+        - Section information (id, name, summary, etc.)
+        - List of modules (activities) in each section
+        - Module contents (files, URLs, etc.) if not excluded
+    """
+    # Access Moodle client from lifespan context
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Fetching contents for course {courseid} from Moodle...")
+
+    try:
+        contents = await client.get_course_contents(courseid, options)
+
+        await ctx.info(f"Successfully retrieved {len(contents)} section(s)")
+        return contents
+
+    except Exception as e:
+        await ctx.error(f"Error fetching course contents: {str(e)}")
         raise
 
 

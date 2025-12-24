@@ -2,7 +2,7 @@
 import httpx
 from typing import Any
 from .utils.logger import get_logger
-from .models import Course, CourseUpdate
+from .models import Course, CourseUpdate, CourseContentsOption
 
 logger = get_logger(__name__)
 
@@ -194,6 +194,43 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {}
+
+    async def get_course_contents(
+        self, 
+        courseid: int, 
+        options: CourseContentsOption | None = None
+    ) -> list[dict[str, Any]]:
+        """Get course contents (sections and modules).
+
+        Args:
+            courseid: Course ID to get contents from
+            options: Optional CourseContentsOption object to filter results.
+                    Available filters:
+                    - excludemodules: Do not return modules, return only sections
+                    - excludecontents: Do not return module contents (files)
+                    - includestealthmodules: Return stealth modules for students
+                    - sectionid: Return only this section
+                    - sectionnumber: Return only this section with number
+                    - cmid: Return only this module information
+                    - modname: Return only modules with this name
+                    - modid: Return only the module with this id
+
+        Returns:
+            List of section dictionaries containing course structure and modules
+        """
+        params: dict[str, Any] = {"courseid": courseid}
+        
+        if options:
+            # Convert to dict and create list of {name, value} objects for Moodle API
+            params["options"] = options.to_moodle_dict()
+        
+        result = await self._call_function(
+            "core_course_get_contents",
+            **params
+        )
+        if isinstance(result, list):
+            return result
+        return []
 
     async def close(self) -> None:
         """Close the HTTP client."""
