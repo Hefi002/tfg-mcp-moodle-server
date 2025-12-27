@@ -272,6 +272,46 @@ async def get_course_contents(
         raise
 
 
+@mcp.tool()
+async def view_course(
+    ctx: Context[ServerSession, MoodleClient],
+    courseid: int,
+    sectionnumber: int = 0
+) -> dict[str, Any]:
+    """Log that the course was viewed (core_course_view_course).
+
+    Calls `MoodleClient.view_course` to notify Moodle that a course (or a specific
+    section) has been viewed and logs that action via the MCP context. The tool
+    returns the raw Moodle response for callers that need to inspect status or
+    warnings.
+
+    Args:
+        courseid: ID of the course that was viewed (required).
+        sectionnumber: Section number within the course that was viewed
+                       (defaults to 0, which is the main page of the course).
+
+    Returns:
+        Dictionary with the Moodle response. Expected to contain at least a
+        `status` field and optionally a `warnings` list of warning objects.
+    """
+    # Access Moodle client from lifespan context
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Fetching view for course {courseid}, section {sectionnumber} from Moodle...")
+
+    try:
+        result = await client.view_course(courseid, sectionnumber)
+
+        # Inform about success; include status if available
+        status_repr = result.get("status") if isinstance(result, dict) else None
+        await ctx.info(f"Successfully viewed course {courseid} (status={status_repr})")
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error viewing course: {str(e)}")
+        raise
+
+
 def run_server():
     """Entry point to run the MCP server."""
     logger.info("Starting Moodle MCP Server")

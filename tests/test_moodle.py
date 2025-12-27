@@ -392,3 +392,33 @@ async def test_get_course_contents(moodle_client):
         assert isinstance(result, list)
         assert result == sample_course_contents
 
+
+@pytest.mark.asyncio
+async def test_view_course(moodle_client):
+    """Test view_course (core_course_view_course) base case without sectionnumber.
+
+    Verifies:
+    - Calls the correct Moodle function with courseid and default sectionnumber
+    - Returns the dict as provided by the API
+    """
+    sample_view_result = {
+        "status": 1,
+        "warnings": []
+    }
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = sample_view_result
+
+        result = await moodle_client.view_course(42)
+
+        # Verify the function was called with the expected parameters
+        mock_call.assert_called_once_with(
+            "core_course_view_course",
+            courseid=42,
+            sectionnumber=0
+        )
+
+        # Verify result structure
+        assert isinstance(result, dict)
+        assert result == sample_view_result
+
