@@ -312,6 +312,43 @@ async def view_course(
         raise
 
 
+@mcp.tool()
+async def get_recent_courses(
+    ctx: Context[ServerSession, MoodleClient],
+    userid: int = 0,
+    limit: int = 0,
+    offset: int = 0,
+    sort: str | None = None
+) -> list[dict[str, Any]]:
+    """Obtener la lista de cursos a los que un usuario ha accedido más recientemente.
+
+    Llama a `MoodleClient.get_recent_courses` y devuelve una lista de cursos.
+
+    Args:
+        userid (Opcional): ID del usuario. Si es 0 (por defecto) se usa el usuario
+                           que realiza la solicitud.
+        limit (Opcional): Límite del número de resultados. 0 devuelve todos los cursos.
+        offset (Opcional): Desplazamiento para paginación.
+        sort (Opcional): Campo por el que ordenar (ej., "fullname", "shortname").
+
+    Returns:
+        Lista de diccionarios de cursos recientes.
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Fetching recent courses for userid={userid}, limit={limit}, offset={offset}, sort={sort}...")
+
+    try:
+        courses = await client.get_recent_courses(userid=userid, limit=limit, offset=offset, sort=sort)
+
+        await ctx.info(f"Successfully retrieved {len(courses)} recent course(s)")
+        return courses
+
+    except Exception as e:
+        await ctx.error(f"Error fetching recent courses: {str(e)}")
+        raise
+
+
 def run_server():
     """Entry point to run the MCP server."""
     logger.info("Starting Moodle MCP Server")

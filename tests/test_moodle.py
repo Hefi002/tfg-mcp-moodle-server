@@ -422,3 +422,23 @@ async def test_view_course(moodle_client):
         assert isinstance(result, dict)
         assert result == sample_view_result
 
+
+@pytest.mark.asyncio
+async def test_get_recent_courses(moodle_client, sample_courses):
+    """Test get_recent_courses base case (todos los parámetros por defecto).
+
+    Verifica que se llame a la función Moodle correcta sin parámetros y que
+    el resultado sea la lista de cursos retornada por la API.
+    """
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = sample_courses
+
+        result = await moodle_client.get_recent_courses()
+
+        # Debe llamarse a la función sin parámetros adicionales
+        mock_call.assert_called_once_with("core_course_get_recent_courses")
+
+        # Verificar resultado
+        assert isinstance(result, list)
+        assert result == sample_courses
+
