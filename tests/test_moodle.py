@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from src.mcp.protocol import MoodleClient
-from src.mcp.models import ManualEnrolment
+from src.mcp.models import ManualEnrolment, UserCreate
 import httpx
 
 
@@ -539,4 +539,32 @@ async def test_manual_enrol_users(moodle_client):
         # Verify the result is an empty dict on success
         assert isinstance(result, dict)
         assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_create_users(moodle_client):
+    """Test create_users base case.
+
+    Ensures that `create_users` calls the correct Moodle function
+    with users converted to dictionaries and returns the list of
+    created users provided by the API.
+    """
+    user = UserCreate(username="jdoe", firstname="John", lastname="Doe", email="jdoe@example.com", createpassword=1)
+    expected_users = [user.to_moodle_dict()]
+    created_response = [{"id": 55, "username": "jdoe"}]
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = created_response
+
+        result = await moodle_client.create_users([user])
+
+        # Verify correct function called with users converted to dicts
+        mock_call.assert_called_once_with(
+            "core_user_create_users",
+            users=expected_users
+        )
+
+        # Verify the returned result matches the API response
+        assert isinstance(result, list)
+        assert result == created_response
 

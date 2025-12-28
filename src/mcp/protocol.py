@@ -2,7 +2,7 @@
 import httpx
 from typing import Any
 from .utils.logger import get_logger
-from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment
+from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, UserCreate
 
 logger = get_logger(__name__)
 
@@ -418,3 +418,51 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {}
+
+    async def create_users(self, users: list[UserCreate]) -> list[dict[str, Any]]:
+        """Create one or more users in Moodle.
+
+        Calls Moodle webservice function `core_user_create_users`.
+
+        Args:
+            users: List of UserCreate objects. Each user must have:
+                  Required fields:
+                  - username: Username (unique, follows Moodle security policy)
+                  - firstname: First name(s) of the user
+                  - lastname: Last name(s) of the user
+                  - email: Valid and unique email address
+                  
+                  Password options (mutually exclusive):
+                  - createpassword: Set to 1 to have system create and email password
+                  - password: Plain text password
+                  
+                  Common optional fields:
+                  - auth: Authentication plugin (default: 'manual')
+                  - idnumber: Arbitrary ID code
+                  - lang: Language code (default: 'en')
+                  - calendartype: Calendar type (default: 'gregorian')
+                  - city, country, timezone: Location fields
+                  - maildisplay, mailformat: Email settings
+                  - description: Profile description
+                  - institution, department: Organizational fields
+                  - phone1, phone2, address: Contact fields
+                  - theme: Theme name
+                  - customfields: List of custom profile fields
+                  - preferences: List of user preferences
+
+        Returns:
+            List of created user dictionaries. Each contains:
+            - id: Assigned user ID
+            - username: Username of the new user
+        """
+        # Convert UserCreate models to dictionaries
+        users_data = [user.to_moodle_dict() for user in users]
+
+        result = await self._call_function(
+            "core_user_create_users",
+            users=users_data
+        )
+
+        if isinstance(result, list):
+            return result
+        return []

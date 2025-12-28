@@ -290,6 +290,212 @@ class ManualEnrolment(BaseModel):
 
 
 # ============================================================================
+# User Models
+# ============================================================================
+
+class UserCustomField(BaseModel):
+    """Custom field for a user profile."""
+    type: str = Field(
+        ...,
+        description="Name/type of the custom field"
+    )
+    value: str = Field(
+        ...,
+        description="Value of the custom field"
+    )
+
+
+class UserPreference(BaseModel):
+    """Preference for a user."""
+    type: str = Field(
+        ...,
+        description="Name/type of the preference"
+    )
+    value: str = Field(
+        ...,
+        description="Value of the preference"
+    )
+
+
+class UserCreate(BaseModel):
+    """Represents a user to be created in Moodle.
+    
+    Used with core_user_create_users to create new users.
+    """
+    # Required fields
+    username: str = Field(
+        ...,
+        min_length=1,
+        description="Username (unique). Must follow Moodle security policy"
+    )
+    firstname: str = Field(
+        ...,
+        min_length=1,
+        description="First name(s) of the user"
+    )
+    lastname: str = Field(
+        ...,
+        min_length=1,
+        description="Last name(s) of the user"
+    )
+    email: str = Field(
+        ...,
+        min_length=1,
+        description="Valid and unique email address"
+    )
+    
+    # Password options (mutually exclusive)
+    createpassword: Optional[int] = Field(
+        default=None,
+        description="Set to 1 to have system create and email password. Incompatible with password field"
+    )
+    password: Optional[str] = Field(
+        default=None,
+        description="Plain text password. Incompatible with createpassword field"
+    )
+    
+    # Common optional fields
+    auth: str = Field(
+        default="manual",
+        description="Authentication plugin. Default: 'manual' (e.g., 'ldap')"
+    )
+    idnumber: str = Field(
+        default="",
+        description="Arbitrary ID code. Default: empty string"
+    )
+    lang: str = Field(
+        default="en",
+        description="Language code (e.g., 'es', 'en'). Default: 'en'"
+    )
+    calendartype: str = Field(
+        default="gregorian",
+        description="Calendar type (e.g., 'gregorian'). Default: 'gregorian'"
+    )
+    
+    # Location fields
+    city: Optional[str] = Field(
+        default=None,
+        description="User's city"
+    )
+    country: Optional[str] = Field(
+        default=None,
+        description="Country code (e.g., 'ES', 'MX')"
+    )
+    timezone: Optional[str] = Field(
+        default=None,
+        description="Timezone (e.g., 'America/Mexico_City'). '99' for site default"
+    )
+    
+    # Contact and profile fields
+    maildisplay: Optional[int] = Field(
+        default=None,
+        description="Email visibility (privacy setting)"
+    )
+    mailformat: Optional[int] = Field(
+        default=None,
+        description="Preferred email format: 0=plain text, 1=HTML"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Profile description (no HTML)"
+    )
+    
+    # Name variations
+    firstnamephonetic: Optional[str] = Field(
+        default=None,
+        description="First name(s) phonetically"
+    )
+    lastnamephonetic: Optional[str] = Field(
+        default=None,
+        description="Last name(s) phonetically"
+    )
+    middlename: Optional[str] = Field(
+        default=None,
+        description="Middle name"
+    )
+    alternatename: Optional[str] = Field(
+        default=None,
+        description="Alternate name"
+    )
+    
+    # Additional profile fields
+    interests: Optional[str] = Field(
+        default=None,
+        description="Interests separated by commas"
+    )
+    institution: Optional[str] = Field(
+        default=None,
+        description="Institution"
+    )
+    department: Optional[str] = Field(
+        default=None,
+        description="Department"
+    )
+    phone1: Optional[str] = Field(
+        default=None,
+        description="Primary phone number"
+    )
+    phone2: Optional[str] = Field(
+        default=None,
+        description="Secondary phone number"
+    )
+    address: Optional[str] = Field(
+        default=None,
+        description="Postal address"
+    )
+    
+    # Appearance
+    theme: Optional[str] = Field(
+        default=None,
+        description="Theme name (must exist in Moodle)"
+    )
+    
+    # Custom fields and preferences
+    customfields: Optional[list[UserCustomField]] = Field(
+        default=None,
+        description="Custom profile fields"
+    )
+    preferences: Optional[list[UserPreference]] = Field(
+        default=None,
+        description="User preferences"
+    )
+
+    @field_validator('createpassword', 'password')
+    @classmethod
+    def validate_password_options(cls, v: Optional[int | str], info) -> Optional[int | str]:
+        """Validates that createpassword and password are not both set."""
+        field_name = info.field_name
+        if v is not None:
+            # Check if the other field is also set
+            other_field = 'password' if field_name == 'createpassword' else 'createpassword'
+            if info.data.get(other_field) is not None:
+                raise ValueError('createpassword and password are incompatible')
+        return v
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
+        
+        Removes None fields and converts nested objects to dictionaries.
+        """
+        data = self.model_dump(exclude_none=True)
+        
+        # Convert nested objects to dictionaries if they exist
+        if 'customfields' in data and data['customfields']:
+            data['customfields'] = [
+                field if isinstance(field, dict) else field.model_dump()
+                for field in data['customfields']
+            ]
+        
+        if 'preferences' in data and data['preferences']:
+            data['preferences'] = [
+                pref if isinstance(pref, dict) else pref.model_dump()
+                for pref in data['preferences']
+            ]
+        
+        return data
+
+
+# ============================================================================
 # Enrolment Models
 # ============================================================================
 

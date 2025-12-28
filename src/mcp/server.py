@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.session import ServerSession
 from .protocol import MoodleClient
-from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment
+from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, UserCreate
 from .utils.logger import get_logger
 
 # Load environment variables
@@ -503,6 +503,93 @@ async def manual_enrol_users(
 
     except Exception as e:
         await ctx.error(f"Error enrolling users: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def create_users(
+    ctx: Context[ServerSession, MoodleClient],
+    users: list[UserCreate]
+) -> list[dict[str, Any]]:
+    """Create one or more users in Moodle.
+
+    Creates new user accounts in the Moodle instance.
+    Each user must have unique username and email.
+
+    Args:
+        users: List of UserCreate objects. Each must have:
+              Required fields:
+              - username: Username (unique). Must follow Moodle security policy
+              - firstname: First name(s) of the user
+              - lastname: Last name(s) of the user
+              - email: Valid and unique email address
+              
+              Password options (mutually exclusive):
+              - createpassword: Set to 1 to have system create and email password
+              - password: Plain text password
+              
+              Common optional fields:
+              - auth: Authentication plugin (default: 'manual', e.g., 'ldap')
+              - idnumber: Arbitrary ID code (default: empty string)
+              - lang: Language code (default: 'en', e.g., 'es')
+              - calendartype: Calendar type (default: 'gregorian')
+              - city: User's city
+              - country: Country code (e.g., 'ES', 'MX')
+              - timezone: Timezone (e.g., 'America/Mexico_City', '99' for site default)
+              - maildisplay: Email visibility (privacy setting)
+              - mailformat: Email format preference (0=plain text, 1=HTML)
+              - description: Profile description (no HTML)
+              - firstnamephonetic, lastnamephonetic: Phonetic name variants
+              - middlename, alternatename: Additional name fields
+              - interests: Comma-separated interests
+              - institution, department: Organizational info
+              - phone1, phone2: Contact numbers
+              - address: Postal address
+              - theme: Theme name (must exist in Moodle)
+              - customfields: List of custom profile fields (type, value)
+              - preferences: List of user preferences (type, value)
+
+    Returns:
+        List of created user dictionaries. Each contains:
+        - id: Assigned user ID in Moodle
+        - username: Username of the new user
+
+    Examples:
+        # Create basic user with auto-generated password
+        users = [UserCreate(
+            username="jdoe",
+            firstname="John",
+            lastname="Doe",
+            email="jdoe@example.com",
+            createpassword=1
+        )]
+        
+        # Create user with specific password and additional info
+        users = [UserCreate(
+            username="jsmith",
+            firstname="Jane",
+            lastname="Smith",
+            email="jsmith@example.com",
+            password="SecurePass123!",
+            city="Barcelona",
+            country="ES",
+            lang="es",
+            institution="Example University",
+            department="Computer Science"
+        )]
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Creating {len(users)} user(s) in Moodle...")
+
+    try:
+        created_users = await client.create_users(users)
+
+        await ctx.info(f"Successfully created {len(created_users)} user(s)")
+        return created_users
+
+    except Exception as e:
+        await ctx.error(f"Error creating users: {str(e)}")
         raise
 
 
