@@ -425,20 +425,57 @@ async def test_view_course(moodle_client):
 
 @pytest.mark.asyncio
 async def test_get_recent_courses(moodle_client, sample_courses):
-    """Test get_recent_courses base case (todos los parámetros por defecto).
+    """Test get_recent_courses base case (all parameters default).
 
-    Verifica que se llame a la función Moodle correcta sin parámetros y que
-    el resultado sea la lista de cursos retornada por la API.
+    Ensures the correct Moodle function is called without extra parameters and
+    that the returned list of courses is propagated unchanged.
     """
     with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
         mock_call.return_value = sample_courses
 
         result = await moodle_client.get_recent_courses()
 
-        # Debe llamarse a la función sin parámetros adicionales
+        # Should call the function without additional parameters
         mock_call.assert_called_once_with("core_course_get_recent_courses")
 
-        # Verificar resultado
+        # Verify the returned result
         assert isinstance(result, list)
         assert result == sample_courses
+
+
+@pytest.mark.asyncio
+async def test_get_course_enrolment_methods(moodle_client):
+    """Test get_course_enrolment_methods calls the correct Moodle function and returns list."""
+    sample_methods = [
+        {
+            "id": 10,
+            "courseid": 42,
+            "type": "manual",
+            "name": "Manual enrolments",
+            "status": "enabled",
+            "wsfunction": "enrol_manual_get_instance_info"
+        },
+        {
+            "id": 11,
+            "courseid": 42,
+            "type": "self",
+            "name": "Self enrolment",
+            "status": "disabled"
+        }
+    ]
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = sample_methods
+
+        result = await moodle_client.get_course_enrolment_methods(42)
+
+        # Verificar que se llamó la función Moodle correcta con el parámetro courseid
+        mock_call.assert_called_once_with(
+            "core_enrol_get_course_enrolment_methods",
+            courseid=42
+        )
+
+        # Verificar estructura y contenido del resultado
+        assert isinstance(result, list)
+        assert result == sample_methods
 

@@ -272,25 +272,26 @@ class MoodleClient:
         offset: int = 0,
         sort: str | None = None
     ) -> list[dict[str, Any]]:
-        """Obtener la lista de cursos a los que un usuario ha accedido, ordenados por fecha de acceso,
-        de más reciente a más antiguo.
+        """Get the list of courses a user has accessed by recency (recent first).
 
-        Llama a la función web service `core_course_get_recent_courses`.
+        Calls the `core_course_get_recent_courses` web service function.
 
-        Argumentos:
-            userid (Opcional): ID del usuario. Si es 0 (por defecto) o se omite, se usa
-                el usuario que realiza la solicitud.
-            limit (Opcional): Límite del número de resultados. 0 devuelve todos los cursos.
-            offset (Opcional): Desplazamiento (offset) para paginación.
-            sort (Opcional): Cadena para ordenar los resultados (ej., "fullname", "shortname").
+        Arguments:
+            userid (Optional): User ID. If 0 (default) or omitted, the current
+                authenticated user is used.
+            limit (Optional): Limit the number of results. 0 (default) returns
+                all available courses.
+            offset (Optional): Offset for courses.
+            sort (Optional): Sort key (e.g. "fullname", "shortname").
 
-        Retorna:
-            Lista de diccionarios de cursos. Si la respuesta no es una lista, devuelve []
+        Returns:
+            A list of course dictionaries. Returns an empty list if the response
+            is not a list.
         """
         params: dict[str, Any] = {}
 
-        # Sólo se añaden los parámetros si son diferentes de sus valores por defecto
-        # para evitar enviar valores innecesarios a la API.
+        # Only include parameters that differ from their defaults to avoid
+        # sending unnecessary values to the API.
         if userid:
             params["userid"] = userid
         if limit:
@@ -312,3 +313,23 @@ class MoodleClient:
     async def close(self) -> None:
         """Close the HTTP client."""
         await self.client.aclose()
+
+    async def get_course_enrolment_methods(self, courseid: int) -> list[dict[str, Any]]:
+        """Get enrolment methods available for a given course.
+
+        Calls Moodle webservice function `core_enrol_get_course_enrolment_methods`.
+
+        Args:
+            courseid: ID del curso para el que se solicitan los métodos de matriculación.
+
+        Returns:
+            Lista de objetos con la información de las instancias de enrol (o lista vacía).
+        """
+
+        result = await self._call_function(
+            "core_enrol_get_course_enrolment_methods",
+            courseid=courseid
+        )
+        if isinstance(result, list):
+            return result
+        return []

@@ -320,19 +320,18 @@ async def get_recent_courses(
     offset: int = 0,
     sort: str | None = None
 ) -> list[dict[str, Any]]:
-    """Obtener la lista de cursos a los que un usuario ha accedido más recientemente.
+    """Get the list of courses a user accessed by recency, most recent first.
 
-    Llama a `MoodleClient.get_recent_courses` y devuelve una lista de cursos.
+    Calls `MoodleClient.get_recent_courses` and returns the list of recent courses.
 
     Args:
-        userid (Opcional): ID del usuario. Si es 0 (por defecto) se usa el usuario
-                           que realiza la solicitud.
-        limit (Opcional): Límite del número de resultados. 0 devuelve todos los cursos.
-        offset (Opcional): Desplazamiento para paginación.
-        sort (Opcional): Campo por el que ordenar (ej., "fullname", "shortname").
+        userid (Optional): User ID. If 0 (default), the requesting user is used.
+        limit (Optional): Maximum number of results. 0 returns all courses.
+        offset (Optional): Result offset for courses.
+        sort (Optional): Field to sort by (e.g., "fullname", "shortname").
 
     Returns:
-        Lista de diccionarios de cursos recientes.
+        List of recent course dictionaries.
     """
     client = ctx.request_context.lifespan_context
 
@@ -346,6 +345,38 @@ async def get_recent_courses(
 
     except Exception as e:
         await ctx.error(f"Error fetching recent courses: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def get_course_enrolment_methods(
+    ctx: Context[ServerSession, MoodleClient],
+    courseid: int
+) -> list[dict[str, Any]]:
+    """Get enrolment methods available for a course.
+    Warning: Moodle currently only returns [] for this call, so shouln't be used.
+
+    Calls `MoodleClient.get_course_enrolment_methods` which invokes
+    the Moodle webservice function `core_enrol_get_course_enrolment_methods`.
+
+    Args:
+        courseid: ID of the course (required).
+
+    Returns:
+        List of objects describing the course's enrolment instances.
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Fetching enrolment methods for course {courseid} from Moodle...")
+
+    try:
+        methods = await client.get_course_enrolment_methods(courseid)
+
+        await ctx.info(f"Successfully retrieved {len(methods)} enrolment method(s)")
+        return methods
+
+    except Exception as e:
+        await ctx.error(f"Error fetching course enrolment methods: {str(e)}")
         raise
 
 
