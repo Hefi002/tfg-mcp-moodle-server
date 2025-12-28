@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.session import ServerSession
 from .protocol import MoodleClient
-from .models import Course, CourseUpdate, CourseContentsOption
+from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment
 from .utils.logger import get_logger
 
 # Load environment variables
@@ -108,6 +108,9 @@ async def create_courses(
     courses: list[Course]
 ) -> list[dict[str, Any]]:
     """Create one or more courses in Moodle.
+    WARNING: When a course is created through this method, no user is enroled
+    by default. You need to manually enrol users after creation.
+    Use of method `manual_enrol_users` is recommended for that.
 
     Args:
         courses: List of Course objects to create. Each Course must have:
@@ -377,6 +380,129 @@ async def get_course_enrolment_methods(
 
     except Exception as e:
         await ctx.error(f"Error fetching course enrolment methods: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def get_enrolled_users(
+    ctx: Context[ServerSession, MoodleClient],
+    courseid: int,
+    options: EnrolledUsersOption | None = None
+) -> list[dict[str, Any]]:
+    """Get list of users enrolled in a course.
+
+    Returns the list of users enrolled in a course by its ID.
+    Optionally filter and sort results using the options parameter.
+
+    Args:
+        courseid: Course ID (required).
+        options: Optional EnrolledUsersOption object to filter results.
+                Available filters:
+                - withcapability: Return only users with this capability
+                  (requires moodle/role:review permission)
+                - groupid: Return only users in this group
+                  (requires moodle/site:accessallgroups if querying user not in group)
+                - onlyactive: 1 to return only users with active enrolments
+                  (requires moodle/course:enrolreview, incompatible with onlysuspended)
+                - onlysuspended: 1 to return only suspended users
+                  (requires moodle/course:enrolreview, incompatible with onlyactive)
+                - userfields: Comma-separated list of user fields to return
+                  (e.g., "id,firstname,lastname,email")
+                - limitfrom: SQL offset for pagination
+                - limitnumber: Maximum number of users to return
+                - sortby: Field to sort by (id, firstname, lastname, siteorder)
+                - sortdirection: Sort direction (ASC or DESC)
+
+    Returns:
+        List of enrolled user dictionaries. Each user object contains:
+        - id: User ID
+        - fullname: Full name
+        - username, firstname, lastname, email (optional)
+        - profileimageurl, profileimageurlsmall (optional)
+        - customfields: List of custom profile fields (optional)
+        - groups: List of course groups the user belongs to (optional)
+        - roles: List of user roles in this course (optional)
+        - And other optional fields depending on userfields parameter
+    """
+    client = ctx.request_context.lifespan_context
+
+    if options:
+        await ctx.info(f"Fetching enrolled users for course {courseid} with filters from Moodle...")
+    else:
+        await ctx.info(f"Fetching all enrolled users for course {courseid} from Moodle...")
+
+    try:
+        users = await client.get_enrolled_users(courseid, options)
+
+        await ctx.info(f"Successfully retrieved {len(users)} enrolled user(s)")
+        return users
+
+    except Exception as e:
+        await ctx.error(f"Error fetching enrolled users: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def manual_enrol_users(
+    ctx: Context[ServerSession, MoodleClient],
+    enrolments: list[ManualEnrolment]
+) -> dict[str, Any]:
+    """Manually enrol users in courses.
+
+    Performs manual enrolment of one or more users in courses.
+    Each enrolment operation specifies a user, course, and role.
+
+    Args:
+        enrolments: List of ManualEnrolment objects. Each must have:
+                   Required fields:
+                   - roleid: Role ID to assign to the user in the course
+                   - userid: User ID to enrol
+                   - courseid: Course ID in which to enrol the user
+                   
+                   Optional fields:
+                   - timestart: Enrolment start timestamp (Unix timestamp).
+                               0 means immediate or use default configuration
+                   - timeend: Enrolment end timestamp (Unix timestamp).
+                             0 means no time restriction
+                   - suspend: Set to 1 to create enrolment in suspended state.
+                             0 or omit for active enrolment
+
+    Returns:
+        Result dictionary. An empty result ({}) indicates success.
+        On error, raises an exception (e.g., invalid_parameter_exception).
+
+    Examples:
+        # Enrol user 5 in course 10 with role 5 (student)
+        enrolments = [ManualEnrolment(roleid=5, userid=5, courseid=10)]
+        
+        # Enrol with time restrictions
+        enrolments = [ManualEnrolment(
+            roleid=5, userid=5, courseid=10,
+            timestart=1640000000, timeend=1672000000
+        )]
+        
+        # Enrol in suspended state
+        enrolments = [ManualEnrolment(
+            roleid=5, userid=5, courseid=10, suspend=1
+        )]
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Enrolling {len(enrolments)} user(s) in Moodle courses...")
+
+    try:
+        result = await client.manual_enrol_users(enrolments)
+
+        # Empty result or dict without errors means success
+        if not result or (isinstance(result, dict) and not result.get('exception')):
+            await ctx.info(f"Successfully enrolled {len(enrolments)} user(s)")
+        else:
+            await ctx.info(f"Enrolment completed with response: {result}")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error enrolling users: {str(e)}")
         raise
 
 

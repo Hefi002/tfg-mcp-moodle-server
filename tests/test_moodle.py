@@ -2,6 +2,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from src.mcp.protocol import MoodleClient
+from src.mcp.models import ManualEnrolment
 import httpx
 
 
@@ -443,6 +444,10 @@ async def test_get_recent_courses(moodle_client, sample_courses):
         assert result == sample_courses
 
 
+# ============================================================================
+# core_enrol Tests
+# ============================================================================
+
 @pytest.mark.asyncio
 async def test_get_course_enrolment_methods(moodle_client):
     """Test get_course_enrolment_methods calls the correct Moodle function and returns list."""
@@ -478,4 +483,60 @@ async def test_get_course_enrolment_methods(moodle_client):
         # Verificar estructura y contenido del resultado
         assert isinstance(result, list)
         assert result == sample_methods
+
+
+@pytest.mark.asyncio
+async def test_get_enrolled_users(moodle_client):
+    """Test get_enrolled_users base case without options.
+
+    Verifica que se llame a la función `core_enrol_get_enrolled_users` con el
+    parámetro `courseid` y que la lista retornada se propague sin cambios.
+    """
+    sample_users = [
+        {"id": 1, "fullname": "Alice"},
+        {"id": 2, "fullname": "Bob"}
+    ]
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = sample_users
+
+        result = await moodle_client.get_enrolled_users(42)
+
+        # Debe llamar la función Moodle con el parámetro courseid
+        mock_call.assert_called_once_with(
+            "core_enrol_get_enrolled_users",
+            courseid=42
+        )
+
+        # Verificar el resultado
+        assert isinstance(result, list)
+        assert result == sample_users
+
+
+@pytest.mark.asyncio
+async def test_manual_enrol_users(moodle_client):
+    """Test manual_enrol_users base case.
+
+    Ensures that `manual_enrol_users` calls the correct Moodle function
+    with the enrolments converted to dictionaries and returns an empty
+    dict when the API returns null/None (success case).
+    """
+    enrolment = ManualEnrolment(roleid=3, userid=5, courseid=42, timestart=0, suspend=0)
+    expected_enrolments = [enrolment.to_moodle_dict()]
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        # Moodle often returns null on success; protocol.manual_enrol_users maps None -> {}
+        mock_call.return_value = None
+
+        result = await moodle_client.manual_enrol_users([enrolment])
+
+        # Verify the Moodle function name and parameter were passed correctly
+        mock_call.assert_called_once_with(
+            "enrol_manual_enrol_users",
+            enrolments=expected_enrolments
+        )
+
+        # Verify the result is an empty dict on success
+        assert isinstance(result, dict)
+        assert result == {}
 

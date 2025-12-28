@@ -235,3 +235,114 @@ class CourseContentsOption(BaseModel):
         default=None,
         description="Return only the module with this ID (to be used with modname)"
     )
+
+    def to_moodle_dict(self) -> list[dict[str, Any]]:
+        """Converts the model to a list of {name, value} dicts for Moodle API.
+        
+        Moodle expects options as an array of objects with 'name' and 'value' keys.
+        Only includes non-None fields.
+        """
+        options = []
+        data = self.model_dump(exclude_none=True)
+        
+        for name, value in data.items():
+            options.append({"name": name, "value": value})
+        
+        return options
+
+
+class ManualEnrolment(BaseModel):
+    """Represents a manual enrolment operation for a user in a course.
+    
+    Used with enrol_manual_enrol_users to manually enrol users.
+    """
+    roleid: int = Field(
+        ...,
+        description="Role ID to assign to the user in the course"
+    )
+    userid: int = Field(
+        ...,
+        description="User ID to enrol"
+    )
+    courseid: int = Field(
+        ...,
+        description="Course ID in which to enrol the user"
+    )
+    timestart: Optional[int] = Field(
+        default=None,
+        description="Enrolment start timestamp. 0 means immediate or use default configuration"
+    )
+    timeend: Optional[int] = Field(
+        default=None,
+        description="Enrolment end timestamp. 0 means no time restriction"
+    )
+    suspend: Optional[int] = Field(
+        default=None,
+        description="Set to 1 to create enrolment in suspended (inactive) state. 0 for active enrolment"
+    )
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
+        
+        Removes None fields to avoid sending unnecessary data to the API.
+        """
+        return self.model_dump(exclude_none=True)
+
+
+# ============================================================================
+# Enrolment Models
+# ============================================================================
+
+class EnrolledUsersOption(BaseModel):
+    """Options for filtering enrolled users results.
+    
+    All fields are optional. Only specify the filters you want to apply.
+    """
+    withcapability: Optional[str] = Field(
+        default=None,
+        description="Return only users with this capability. Requires moodle/role:review permission"
+    )
+    groupid: Optional[int] = Field(
+        default=None,
+        description="Return only users in this group. Requires moodle/site:accessallgroups if querying user not in group"
+    )
+    onlyactive: Optional[int] = Field(
+        default=None,
+        description="1 to return only users with active enrolments. Requires moodle/course:enrolreview. Incompatible with onlysuspended"
+    )
+    onlysuspended: Optional[int] = Field(
+        default=None,
+        description="1 to return only suspended users. Requires moodle/course:enrolreview. Incompatible with onlyactive"
+    )
+    userfields: Optional[str] = Field(
+        default=None,
+        description="Comma-separated list of user fields to return (e.g., 'id,firstname,lastname')"
+    )
+    limitfrom: Optional[int] = Field(
+        default=None,
+        description="SQL offset for pagination"
+    )
+    limitnumber: Optional[int] = Field(
+        default=None,
+        description="Maximum number of users to return"
+    )
+    sortby: Optional[str] = Field(
+        default=None,
+        description="Field to sort by: id, firstname, lastname, siteorder"
+    )
+    sortdirection: Optional[str] = Field(
+        default=None,
+        description="Sort direction: ASC or DESC"
+    )
+
+    @field_validator('onlyactive', 'onlysuspended')
+    @classmethod
+    def validate_active_suspended(cls, v: Optional[int], info) -> Optional[int]:
+        """Validates that onlyactive and onlysuspended are not both set."""
+        field_name = info.field_name
+        if v is not None:
+            # Check if the other field is also set
+            other_field = 'onlysuspended' if field_name == 'onlyactive' else 'onlyactive'
+            if info.data.get(other_field) is not None:
+                raise ValueError('onlyactive and onlysuspended are incompatible')
+        return v

@@ -2,7 +2,7 @@
 import httpx
 from typing import Any
 from .utils.logger import get_logger
-from .models import Course, CourseUpdate, CourseContentsOption
+from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment
 
 logger = get_logger(__name__)
 
@@ -103,11 +103,11 @@ class MoodleClient:
             data = response.json()
 
             # Check for unexpected response type
-            if not isinstance(data, (dict, list)):
+            if not isinstance(data, (dict, list, type(None))):
                 logger.error(f"Unexpected response type: {type(data).__name__}")
                 raise ValueError(f"Moodle API returned unexpected type: {type(data).__name__}")
             # Check for Moodle API error
-            elif "exception" in data:
+            elif isinstance(data, dict) and "exception" in data:
                 error_msg = data.get("message", "Unknown error")
                 logger.error(f"Moodle API error: {error_msg}")
                 raise ValueError(f"Moodle API error: {error_msg}")
@@ -333,3 +333,88 @@ class MoodleClient:
         if isinstance(result, list):
             return result
         return []
+
+    async def get_enrolled_users(
+        self,
+        courseid: int,
+        options: EnrolledUsersOption | None = None
+    ) -> list[dict[str, Any]]:
+        """Get list of users enrolled in a course.
+
+        Calls Moodle webservice function `core_enrol_get_enrolled_users`.
+
+        Args:
+            courseid: Course ID (required).
+            options: Optional EnrolledUsersOption object to filter results.
+                    Available filters:
+                    - withcapability: Return only users with this capability
+                    - groupid: Return only users in this group
+                    - onlyactive: 1 to return only users with active enrolments
+                    - onlysuspended: 1 to return only suspended users
+                    - userfields: Comma-separated list of user fields to return
+                    - limitfrom: SQL offset for pagination
+                    - limitnumber: Maximum number of users to return
+                    - sortby: Field to sort by (id, firstname, lastname, siteorder)
+                    - sortdirection: Sort direction (ASC or DESC)
+
+        Returns:
+            List of enrolled user dictionaries. Each user object contains:
+            - id: User ID
+            - fullname: Full name
+            - username, firstname, lastname, email (if requested)
+            - profileimageurl, profileimageurlsmall (if available)
+            - customfields: List of custom profile fields
+            - groups: List of course groups the user belongs to
+            - roles: List of user roles in this course
+            - And other optional fields depending on userfields parameter
+        """
+        params: dict[str, Any] = {"courseid": courseid}
+
+        if options:
+            # Convert to list of {name, value} objects for Moodle API
+            params["options"] = options.to_moodle_dict()
+
+        result = await self._call_function(
+            "core_enrol_get_enrolled_users",
+            **params
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    async def manual_enrol_users(self, enrolments: list[ManualEnrolment]) -> dict[str, Any]:
+        """Manually enrol users in courses.
+
+        Calls Moodle webservice function `enrol_manual_enrol_users`.
+
+        Args:
+            enrolments: List of ManualEnrolment objects. Each enrolment must have:
+                       Required fields:
+                       - roleid: Role ID to assign to the user
+                       - userid: User ID to enrol
+                       - courseid: Course ID in which to enrol the user
+                       
+                       Optional fields:
+                       - timestart: Enrolment start timestamp (0 = immediate/default)
+                       - timeend: Enrolment end timestamp (0 = no restriction)
+                       - suspend: 1 to create suspended enrolment, 0 for active
+
+        Returns:
+            Result dictionary. An empty result indicates success.
+            On error, raises an exception (e.g., invalid_parameter_exception).
+        """
+        # Convert ManualEnrolment models to dictionaries
+        enrolments_data = [enrolment.to_moodle_dict() for enrolment in enrolments]
+
+        result = await self._call_function(
+            "enrol_manual_enrol_users",
+            enrolments=enrolments_data
+        )
+
+        # The API typically returns null/None on success, but we'll handle both cases
+        if result is None:
+            return {}
+        if isinstance(result, dict):
+            return result
+        return {}
