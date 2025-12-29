@@ -365,11 +365,11 @@ class UserCreate(BaseModel):
     )
     lang: str = Field(
         default="en",
-        description="Language code (e.g., 'es', 'en'). Default: 'en'"
+        description="Language code (e.g., 'en', must exist in Moodle). Default: 'en'"
     )
     calendartype: str = Field(
         default="gregorian",
-        description="Calendar type (e.g., 'gregorian'). Default: 'gregorian'"
+        description="Calendar type (e.g., 'gregorian', must exist in Moodle). Default: 'gregorian'"
     )
     
     # Location fields
@@ -493,6 +493,26 @@ class UserCreate(BaseModel):
             ]
         
         return data
+
+
+class UserSearchCriteria(BaseModel):
+    """Search criteria for finding users.
+    
+    Used with core_user_get_users to search for users matching specific criteria.
+    """
+    key: str = Field(
+        ...,
+        description="User column to search by: 'id', 'lastname', 'firstname', 'idnumber', 'username', 'email', 'auth'"
+    )
+    value: str = Field(
+        ...,
+        min_length=1,
+        description="Value to search for. Use '%' as wildcard for text fields. For 'id', must be numeric string"
+    )
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API."""
+        return self.model_dump()
 
 
 # ============================================================================

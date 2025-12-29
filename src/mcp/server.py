@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.session import ServerSession
 from .protocol import MoodleClient
-from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, UserCreate
+from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, UserCreate, UserSearchCriteria
 from .utils.logger import get_logger
 
 # Load environment variables
@@ -590,6 +590,96 @@ async def create_users(
 
     except Exception as e:
         await ctx.error(f"Error creating users: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def get_users(
+    ctx: Context[ServerSession, MoodleClient],
+    criteria: list[UserSearchCriteria]
+) -> dict[str, Any]:
+    """Search for users matching specified criteria.
+
+    Searches for users in Moodle that match the given search criteria.
+    Multiple criteria are combined with AND operator.
+
+    Args:
+        criteria: List of UserSearchCriterion objects (key/value pairs).
+                 Each criterion must have:
+                 - key: User column to search by (must be unique):
+                   * 'id': Match user ID (value must be numeric string)
+                   * 'lastname': Last name (can use '%' as wildcard)
+                   * 'firstname': First name (can use '%' as wildcard)
+                   * 'idnumber': ID number
+                   * 'username': Username
+                   * 'email': Email (can use '%' as wildcard)
+                   * 'auth': Authentication plugin (e.g., 'manual', 'ldap')
+                 - value: Value to search for (cannot be empty)
+                 
+                 Important notes:
+                 - Each key must be unique in the criteria list
+                 - Search uses AND operator between valid criteria
+                 - Invalid criteria are ignored with warnings
+                 - Empty criteria list not recommended (can be very slow)
+                 - Use '%' as wildcard for text fields (e.g., 'John%', '%smith')
+
+    Returns:
+        Dictionary containing:
+        - users: List of user dictionaries found. Each user contains:
+          * id: User ID
+          * username, firstname, lastname (optional)
+          * fullname: Full name
+          * email (optional)
+          * auth: Authentication plugin (optional)
+          * suspended: 1 if suspended, 0 if active (optional)
+          * confirmed: 1 if confirmed (optional)
+          * idnumber, institution, department (optional)
+          * city, country (optional)
+          * profileimageurl, profileimageurlsmall: Profile image URLs
+          * customfields: List of custom profile fields (optional)
+          * preferences: List of user preferences (optional)
+          * And other optional fields (phone1, phone2, lang, timezone, etc.)
+        - warnings: List of warning objects if any issues occurred:
+          * item, itemid, warningcode, message
+
+    Examples:
+        # Search by user ID
+        criteria = [UserSearchCriterion(key="id", value="5")]
+        
+        # Search by username
+        criteria = [UserSearchCriterion(key="username", value="jdoe")]
+        
+        # Search by email with wildcard
+        criteria = [UserSearchCriterion(key="email", value="%@example.com")]
+        
+        # Search by multiple criteria (AND operator)
+        criteria = [
+            UserSearchCriterion(key="lastname", value="Smith"),
+            UserSearchCriterion(key="auth", value="manual")
+        ]
+        
+        # Search by partial name
+        criteria = [UserSearchCriterion(key="firstname", value="John%")]
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Searching for users with {len(criteria)} criterion/criteria in Moodle...")
+
+    try:
+        result = await client.get_users(criteria)
+        
+        users_found = len(result.get("users", []))
+        warnings_count = len(result.get("warnings", []))
+        
+        if warnings_count > 0:
+            await ctx.info(f"Found {users_found} user(s) with {warnings_count} warning(s)")
+        else:
+            await ctx.info(f"Successfully found {users_found} user(s)")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error searching users: {str(e)}")
         raise
 
 

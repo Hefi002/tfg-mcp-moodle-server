@@ -2,7 +2,7 @@
 import httpx
 from typing import Any
 from .utils.logger import get_logger
-from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, UserCreate
+from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, UserCreate, UserSearchCriteria
 
 logger = get_logger(__name__)
 
@@ -466,3 +466,58 @@ class MoodleClient:
         if isinstance(result, list):
             return result
         return []
+
+    async def get_users(self, criteria: list[UserSearchCriteria]) -> dict[str, Any]:
+        """Search for users matching specified criteria.
+
+        Calls Moodle webservice function `core_user_get_users`.
+
+        Args:
+            criteria: List of UserSearchCriterion objects (key/value pairs).
+                     Each criterion must have:
+                     - key: User column to search by:
+                       * 'id': Match user ID (value must be numeric string)
+                       * 'lastname': Last name (can use '%' as wildcard)
+                       * 'firstname': First name (can use '%' as wildcard)
+                       * 'idnumber': ID number
+                       * 'username': Username
+                       * 'email': Email (can use '%' as wildcard)
+                       * 'auth': Authentication plugin (e.g., 'manual', 'ldap')
+                     - value: Value to search for (cannot be empty)
+                     
+                     Notes:
+                     - Each key must be unique
+                     - Search uses AND operator between valid criteria
+                     - Invalid criteria are ignored
+                     - Empty criteria not recommended (can be very slow)
+
+        Returns:
+            Dictionary containing:
+            - users: List of user dictionaries found. Each user contains:
+              * id: User ID
+              * username, firstname, lastname (optional)
+              * fullname: Full name
+              * email (optional)
+              * auth: Authentication plugin (optional)
+              * suspended: 1 if suspended, 0 if active (optional)
+              * confirmed: 1 if confirmed (optional)
+              * idnumber, institution, department (optional)
+              * city, country (optional)
+              * profileimageurl, profileimageurlsmall: Profile images
+              * customfields: List of custom fields (optional)
+              * preferences: List of preferences (optional)
+              * And other optional fields (phone1, phone2, lang, timezone, etc.)
+            - warnings: List of warning objects (optional)
+              * item, itemid, warningcode, message
+        """
+        # Convert UserSearchCriterion models to dictionaries
+        criteria_data = [criterion.to_moodle_dict() for criterion in criteria]
+
+        result = await self._call_function(
+            "core_user_get_users",
+            criteria=criteria_data
+        )
+
+        if isinstance(result, dict):
+            return result
+        return {"users": [], "warnings": []}

@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from src.mcp.protocol import MoodleClient
-from src.mcp.models import ManualEnrolment, UserCreate
+from src.mcp.models import ManualEnrolment, UserCreate, UserSearchCriteria
 import httpx
 
 
@@ -567,4 +567,39 @@ async def test_create_users(moodle_client):
         # Verify the returned result matches the API response
         assert isinstance(result, list)
         assert result == created_response
+
+
+@pytest.mark.asyncio
+async def test_get_users(moodle_client):
+    """Test get_users base case.
+
+    Ensures that `get_users` calls the correct Moodle function
+    with criteria converted to dictionaries and returns the
+    dictionary response provided by the API.
+    """
+    criterion = UserSearchCriteria(key="username", value="jdoe")
+    expected_criteria = [criterion.to_moodle_dict()]
+
+    api_response = {
+        "users": [
+            {"id": 55, "username": "jdoe", "firstname": "John", "lastname": "Doe"}
+        ],
+        "warnings": []
+    }
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = api_response
+
+        result = await moodle_client.get_users([criterion])
+
+        # Verify the Moodle function and parameters
+        mock_call.assert_called_once_with(
+            "core_user_get_users",
+            criteria=expected_criteria
+        )
+
+        # Verify the returned structure matches the API response
+        assert isinstance(result, dict)
+        assert "users" in result
+        assert result == api_response
 
