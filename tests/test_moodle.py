@@ -603,3 +603,43 @@ async def test_get_users(moodle_client):
         assert "users" in result
         assert result == api_response
 
+
+@pytest.mark.asyncio
+async def test_get_users_courses(moodle_client):
+    """Test get_users_courses base case.
+
+    Ensures that `get_users_courses` calls the correct Moodle function
+    with the provided userid and returnusercount and returns the list
+    of courses as provided by the API.
+    """
+    sample_courses_for_user = [
+        {
+            "id": 101,
+            "shortname": "BIO101",
+            "fullname": "Biology 101",
+            "enrolledusercount": 42
+        },
+        {
+            "id": 102,
+            "shortname": "CHEM101",
+            "fullname": "Chemistry 101",
+            "enrolledusercount": 30
+        }
+    ]
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = sample_courses_for_user
+
+        # Call with default returnusercount
+        result = await moodle_client.get_users_courses(userid=5)
+
+        # Verify correct Moodle function and parameters
+        mock_call.assert_called_once_with(
+            "core_enrol_get_users_courses",
+            userid=5,
+            returnusercount=1
+        )
+
+        # Verify the returned list matches the API response
+        assert isinstance(result, list)
+        assert result == sample_courses_for_user

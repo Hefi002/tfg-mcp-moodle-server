@@ -572,3 +572,17 @@ class EnrolledUsersOption(BaseModel):
             if info.data.get(other_field) is not None:
                 raise ValueError('onlyactive and onlysuspended are incompatible')
         return v
+
+    def to_moodle_dict(self) -> list[dict[str, Any]]:
+        """Converts the model to a list of {name, value} dicts for Moodle API.
+        
+        Moodle expects options as an array of objects with 'name' and 'value' keys.
+        Only includes non-None fields.
+        """
+        options = []
+        data = self.model_dump(exclude_none=True)
+        
+        for name, value in data.items():
+            options.append({"name": name, "value": value})
+        
+        return options

@@ -521,3 +521,56 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {"users": [], "warnings": []}
+
+    async def get_users_courses(self, userid: int, returnusercount: int = 1) -> list[dict[str, Any]]:
+        """Get list of courses where a user is enrolled.
+
+        Calls Moodle webservice function `core_enrol_get_users_courses`.
+
+        Args:
+            userid: User ID (required).
+            returnusercount: Include enrolled user count in each course.
+                            1 (default) to include count.
+                            0 to omit and improve performance (especially for users
+                            enrolled in many large courses).
+
+        Returns:
+            List of course dictionaries where the user is enrolled. Each course contains:
+            - id: Course ID
+            - shortname: Course short name
+            - fullname: Course full name
+            - displayname: Display name for lists (optional)
+            - idnumber: Course ID number
+            - visible: 1 if visible, 0 if hidden
+            - enrolledusercount: Number of enrolled users (optional, only if returnusercount=1)
+            - category: Category ID (optional)
+            - format: Course format (e.g., 'weeks', 'topics', 'site') (optional)
+            - summary: Course summary (optional)
+            - summaryformat: Summary format (1=HTML, 0=MOODLE, 2=PLAIN, 4=MARKDOWN) (optional)
+            - lang: Forced course language (optional)
+            - courseimage: Course image URL (optional)
+            - startdate, enddate: Course dates (timestamps) (optional)
+            - timemodified: Last modification timestamp (optional)
+            - enablecompletion: 1 if completion tracking enabled (optional)
+            - completionhascriteria: 1 if completion criteria set (optional)
+            - completionusertracked: 1 if user is tracked for completion (optional)
+            - progress: User's progress percentage (optional)
+            - completed: 1 if user completed the course (optional)
+            - lastaccess: User's last access timestamp (optional)
+            - isfavourite: 1 if user marked course as favourite (optional)
+            - hidden: 1 if user hid course from dashboard (optional)
+            - marker: Course section marker (optional)
+            - showgrades: 1 if grades are shown (optional)
+            - showactivitydates: 1 if activity dates are shown
+            - showcompletionconditions: 1 if completion conditions are shown
+            - overviewfiles: List of overview files attached to course (optional)
+        """
+        result = await self._call_function(
+            "core_enrol_get_users_courses",
+            userid=userid,
+            returnusercount=returnusercount
+        )
+
+        if isinstance(result, list):
+            return result
+        return []

@@ -683,6 +683,82 @@ async def get_users(
         raise
 
 
+@mcp.tool()
+async def get_users_courses(
+    ctx: Context[ServerSession, MoodleClient],
+    userid: int,
+    returnusercount: int = 1
+) -> list[dict[str, Any]]:
+    """Get list of courses where a user is enrolled.
+
+    Returns all courses in which the specified user is enrolled,
+    optionally including the count of enrolled users in each course.
+
+    Args:
+        userid: User ID (required).
+        returnusercount: Include enrolled user count in each course.
+                        1 (default) to include the count.
+                        0 to omit for better performance (especially useful
+                        when user is enrolled in many large courses).
+
+    Returns:
+        List of course dictionaries where the user is enrolled. Each course contains:
+        - id: Course ID
+        - shortname: Course short name
+        - fullname: Course full name
+        - displayname: Display name for lists (optional)
+        - idnumber: Course ID number
+        - visible: 1 if visible, 0 if hidden
+        - enrolledusercount: Number of enrolled users (optional, only if returnusercount=1)
+        - category: Category ID (optional)
+        - format: Course format (e.g., 'weeks', 'topics', 'site') (optional)
+        - summary: Course summary (optional)
+        - summaryformat: Summary format (1=HTML, 0=MOODLE, 2=PLAIN, 4=MARKDOWN) (optional)
+        - lang: Forced course language (optional)
+        - courseimage: Course image URL (optional)
+        - startdate, enddate: Course dates as Unix timestamps (optional)
+        - timemodified: Last modification timestamp (optional)
+        - enablecompletion: 1 if completion tracking enabled (optional)
+        - completionhascriteria: 1 if completion criteria are set (optional)
+        - completionusertracked: 1 if user is tracked for completion (optional)
+        - progress: User's progress percentage (optional)
+        - completed: 1 if user completed the course (optional)
+        - lastaccess: User's last access timestamp (optional)
+        - isfavourite: 1 if user marked course as favourite (optional)
+        - hidden: 1 if user hid course from dashboard (optional)
+        - marker: Course section marker (optional)
+        - showgrades: 1 if grades are shown (optional)
+        - showactivitydates: 1 if activity dates are shown
+        - showcompletionconditions: 1 if completion conditions are shown
+        - overviewfiles: List of overview files attached to course (optional)
+          Each file object contains: filename, filepath, filesize, fileurl,
+          timemodified, mimetype, isexternalfile, repositorytype, icon
+
+    Examples:
+        # Get all courses for user 5 with user counts
+        courses = get_users_courses(userid=5)
+        
+        # Get courses without user counts for better performance
+        courses = get_users_courses(userid=5, returnusercount=0)
+    """
+    client = ctx.request_context.lifespan_context
+
+    if returnusercount == 1:
+        await ctx.info(f"Fetching courses for user {userid} with enrolled user counts from Moodle...")
+    else:
+        await ctx.info(f"Fetching courses for user {userid} (without user counts) from Moodle...")
+
+    try:
+        courses = await client.get_users_courses(userid, returnusercount)
+
+        await ctx.info(f"Successfully retrieved {len(courses)} course(s) for user {userid}")
+        return courses
+
+    except Exception as e:
+        await ctx.error(f"Error fetching user courses: {str(e)}")
+        raise
+
+
 def run_server():
     """Entry point to run the MCP server."""
     logger.info("Starting Moodle MCP Server")
