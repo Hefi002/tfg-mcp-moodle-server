@@ -700,3 +700,70 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {"status": 0, "warnings": []}
+
+    async def get_site_info(self) -> dict[str, Any]:
+        """Get site information, current user details and available webservice functions.
+
+        Calls Moodle webservice function `core_webservice_get_site_info`.
+        Returns comprehensive information about the Moodle site, the authenticated user,
+        and the list of webservice functions available to this user.
+
+        Note:
+            The Moodle API function accepts a deprecated parameter `serviceshortnames`
+            which is ignored by the API. This parameter is not exposed in this method
+            as it serves no purpose.
+
+        Returns:
+            Dictionary containing extensive site and user information:
+            
+            User Information:
+            - userid: Current user ID
+            - username: Username
+            - firstname: First name
+            - lastname: Last name
+            - fullname: Full name
+            - userpictureurl: Public profile picture URL
+            - lang: Current user language
+            - userissiteadmin: 1 if user is site admin (optional)
+            - userhomepage: Default homepage (0=Site, 1=Dashboard, 4=Custom) (optional)
+            - userhomepageurl: Custom homepage URL if userhomepage is 4 (optional)
+            
+            Site Information:
+            - sitename: Site name
+            - siteurl: Site URL
+            - siteid: Site course ID (optional)
+            - release: Moodle release number (e.g., "4.4.1") (optional)
+            - version: Moodle version (optional)
+            - mobilecssurl: Mobile custom CSS URL (optional)
+            - sitecalendartype: Site calendar type (optional)
+            - usercalendartype: User calendar type (optional)
+            - theme: Current theme for user (optional)
+            
+            Capabilities and Limits:
+            - downloadfiles: 1 if user can download files (optional)
+            - uploadfiles: 1 if user can upload files (optional)
+            - usercanmanageownfiles: 1 if user can manage own files (optional)
+            - userquota: User storage quota in bytes (0 = unlimited) (optional)
+            - usermaxuploadfilesize: Max upload size in bytes (-1 = unlimited) (optional)
+            - limitconcurrentlogins: Number of concurrent sessions allowed (optional)
+            - usersessionscount: Number of active user sessions (optional)
+            - policyagreed: 1 if user agreed to all policies (optional)
+            
+            Webservice Functions:
+            - functions: List of available webservice function objects:
+              * name: Function name
+              * version: Component version
+            
+            Advanced Features:
+            - advancedfeatures: List of site advanced features status (optional):
+              * name: Feature name
+              * value: Usually 1 for enabled
+            
+            Access:
+            - userprivateaccesskey: User private access key for file retrieval (optional)
+        """
+        result = await self._call_function("core_webservice_get_site_info")
+
+        if isinstance(result, dict):
+            return result
+        return {}

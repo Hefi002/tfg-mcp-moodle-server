@@ -1010,6 +1010,127 @@ async def update_activity_completion_status_manually(
         raise
 
 
+@mcp.tool()
+async def get_site_info(
+    ctx: Context[ServerSession, MoodleClient]
+) -> dict[str, Any]:
+    """Get site information, current user details and available webservice functions.
+
+    Retrieves comprehensive information about the Moodle site, the authenticated user,
+    and the list of webservice functions available to the current user/token.
+    This is useful for understanding the current user's capabilities, site configuration,
+    and what operations are available through the webservice.
+
+    Note:
+        The Moodle API function accepts a deprecated parameter `serviceshortnames`
+        which is ignored by the API. This parameter is not exposed in this tool
+        as it serves no purpose.
+
+    Returns:
+        Dictionary containing extensive site and user information:
+        
+        User Information:
+        - userid: Current user ID
+        - username: Username of the authenticated user
+        - firstname: User's first name
+        - lastname: User's last name
+        - fullname: User's complete name
+        - userpictureurl: Public URL of user's profile picture
+        - lang: Current language code (e.g., 'en', 'es')
+        - userissiteadmin: 1 if user is site administrator (optional)
+        - userhomepage: Default homepage setting (0=Site, 1=Dashboard, 4=Custom) (optional)
+        - userhomepageurl: Custom homepage URL if userhomepage is 4 (optional)
+        
+        Site Information:
+        - sitename: Name of the Moodle site
+        - siteurl: Base URL of the site
+        - siteid: ID of the site course (optional)
+        - release: Moodle release number (e.g., "4.4.1") (optional)
+        - version: Moodle version string (optional)
+        - mobilecssurl: URL for mobile custom CSS (optional)
+        - sitecalendartype: Calendar type configured for the site (optional)
+        - usercalendartype: Calendar type used by this user (optional)
+        - theme: Current theme name for the user (optional)
+        
+        Capabilities and Limits:
+        - downloadfiles: 1 if user can download files (optional)
+        - uploadfiles: 1 if user can upload files (optional)
+        - usercanmanageownfiles: 1 if user can manage their own files (optional)
+        - userquota: User's storage quota in bytes (0 = unlimited) (optional)
+        - usermaxuploadfilesize: Maximum upload file size in bytes (-1 = unlimited) (optional)
+        - limitconcurrentlogins: Number of concurrent sessions allowed (optional)
+        - usersessionscount: Number of currently active sessions for this user (optional)
+        - policyagreed: 1 if user has agreed to all site policies (optional)
+        
+        Webservice Functions:
+        - functions: List of available webservice function objects. Each contains:
+          * name: Name of the webservice function (e.g., 'core_course_get_courses')
+          * version: Version of the component providing the function
+        
+        Advanced Features:
+        - advancedfeatures: List of site's advanced features and their status (optional):
+          * name: Feature name
+          * value: Usually 1 when enabled, 0 when disabled
+        
+        Access:
+        - userprivateaccesskey: User's private access key for secure file retrieval (optional)
+
+    Examples:
+        # Get all site and user information
+        info = get_site_info()
+        print(f"Site: {info['sitename']}")
+        print(f"User: {info['fullname']} ({info['username']})")
+        print(f"Is admin: {info.get('userissiteadmin', 0) == 1}")
+        
+        # Check available functions
+        functions = info.get('functions', [])
+        print(f"Available functions: {len(functions)}")
+        for func in functions:
+            print(f"  - {func['name']}")
+        
+        # Check user capabilities
+        if info.get('uploadfiles', 0) == 1:
+            print("User can upload files")
+        if info.get('downloadfiles', 0) == 1:
+            print("User can download files")
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info("Fetching site information and available webservice functions...")
+
+    try:
+        result = await client.get_site_info()
+        
+        # Extract key information for logging
+        sitename = result.get("sitename", "Unknown")
+        username = result.get("username", "Unknown")
+        fullname = result.get("fullname", "Unknown")
+        is_admin = result.get("userissiteadmin", 0) == 1
+        functions_count = len(result.get("functions", []))
+        
+        await ctx.info(f"Site: {sitename}")
+        await ctx.info(f"User: {fullname} ({username})" + (" [ADMIN]" if is_admin else ""))
+        await ctx.info(f"Available webservice functions: {functions_count}")
+        
+        # Log some useful capabilities if present
+        capabilities = []
+        if result.get("uploadfiles", 0) == 1:
+            capabilities.append("upload files")
+        if result.get("downloadfiles", 0) == 1:
+            capabilities.append("download files")
+        if result.get("usercanmanageownfiles", 0) == 1:
+            capabilities.append("manage own files")
+        
+        if capabilities:
+            await ctx.info(f"User capabilities: {', '.join(capabilities)}")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error fetching site info: {str(e)}")
+        raise
+
+
 def run_server():
     """Entry point to run the MCP server."""
     logger.info("Starting Moodle MCP Server")

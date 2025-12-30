@@ -750,3 +750,54 @@ async def test_update_activity_completion_status_manually(moodle_client):
         assert result["status"] == 1
         assert "warnings" in result
 
+
+@pytest.mark.asyncio
+async def test_get_site_info(moodle_client):
+    """Base case test for get_site_info.
+
+    Ensures:
+    - correct webservice function is invoked,
+    - function is called without parameters (serviceshortnames is deprecated and not exposed),
+    - returned value is propagated unchanged.
+    """
+    expected_func = "core_webservice_get_site_info"
+    expected_result = {
+        "userid": 2,
+        "username": "admin",
+        "firstname": "Admin",
+        "lastname": "User",
+        "fullname": "Admin User",
+        "lang": "en",
+        "sitename": "Test Moodle Site",
+        "siteurl": "http://localhost:8000",
+        "release": "4.4.1",
+        "version": "2024100700.00",
+        "userissiteadmin": 1,
+        "functions": [
+            {"name": "core_course_get_courses", "version": "2024100700.00"},
+            {"name": "core_user_get_users", "version": "2024100700.00"}
+        ],
+        "downloadfiles": 1,
+        "uploadfiles": 1
+    }
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = expected_result
+
+        # Test without parameters (base case)
+        result = await moodle_client.get_site_info()
+
+        # Verify correct function called without extra parameters
+        mock_call.assert_called_once_with(
+            expected_func
+        )
+
+        # Verify result propagated
+        assert isinstance(result, dict)
+        assert result == expected_result
+        assert result["userid"] == 2
+        assert result["username"] == "admin"
+        assert result["sitename"] == "Test Moodle Site"
+        assert "functions" in result
+        assert len(result["functions"]) == 2
+
