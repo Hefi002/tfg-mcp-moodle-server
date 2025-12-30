@@ -289,6 +289,32 @@ class ManualEnrolment(BaseModel):
         return self.model_dump(exclude_none=True)
 
 
+class ManualUnenrolment(BaseModel):
+    """Represents a manual unenrolment operation for a user from a course.
+    
+    Used with enrol_manual_unenrol_users to manually unenrol users.
+    """
+    userid: int = Field(
+        ...,
+        description="User ID to unenrol"
+    )
+    courseid: int = Field(
+        ...,
+        description="Course ID from which to unenrol the user"
+    )
+    roleid: Optional[int] = Field(
+        default=None,
+        description="Specific role ID to remove. If not specified, all roles will be removed (complete unenrolment)"
+    )
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
+        
+        Removes None fields to avoid sending unnecessary data to the API.
+        """
+        return self.model_dump(exclude_none=True)
+
+
 # ============================================================================
 # User Models
 # ============================================================================

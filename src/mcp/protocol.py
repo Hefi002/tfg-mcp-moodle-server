@@ -2,7 +2,7 @@
 import httpx
 from typing import Any
 from .utils.logger import get_logger
-from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, UserCreate, UserSearchCriteria
+from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, ManualUnenrolment, UserCreate, UserSearchCriteria
 
 logger = get_logger(__name__)
 
@@ -174,6 +174,55 @@ class MoodleClient:
             "core_course_update_courses",
             courses=courses_data
         )
+        if isinstance(result, dict):
+            return result
+        return {}
+
+    async def manual_unenrol_users(self, enrolments: list[ManualUnenrolment]) -> dict[str, Any]:
+        """Manually unenrol users from courses.
+
+        Calls Moodle webservice function `enrol_manual_unenrol_users`.
+        Removes user enrolments from courses. Can remove specific roles or
+        completely unenrol the user by removing all roles.
+
+        Args:
+            enrolments: List of ManualUnenrolment objects. Each unenrolment must have:
+                       Required fields:
+                       - userid: User ID to unenrol
+                       - courseid: Course ID from which to unenrol the user
+                       
+                       Optional field:
+                       - roleid: Specific role ID to remove. If not specified,
+                                all roles will be removed (complete unenrolment)
+
+        Returns:
+            Result dictionary. An empty result ({}) indicates success.
+            On error, raises an exception (e.g., invalid_parameter_exception).
+            
+        Examples:
+            # Completely unenrol user 5 from course 10 (remove all roles)
+            unenrolments = [ManualUnenrolment(userid=5, courseid=10)]
+            
+            # Remove only specific role (e.g., student role 5) for user 5 in course 10
+            unenrolments = [ManualUnenrolment(userid=5, courseid=10, roleid=5)]
+            
+            # Unenrol multiple users
+            unenrolments = [
+                ManualUnenrolment(userid=5, courseid=10),
+                ManualUnenrolment(userid=6, courseid=10)
+            ]
+        """
+        # Convert ManualUnenrolment models to dictionaries
+        enrolments_data = [enrolment.to_moodle_dict() for enrolment in enrolments]
+
+        result = await self._call_function(
+            "enrol_manual_unenrol_users",
+            enrolments=enrolments_data
+        )
+
+        # The API typically returns null/None on success, but we'll handle both cases
+        if result is None:
+            return {}
         if isinstance(result, dict):
             return result
         return {}

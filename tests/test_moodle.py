@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from src.mcp.protocol import MoodleClient
-from src.mcp.models import ManualEnrolment, UserCreate, UserSearchCriteria
+from src.mcp.models import ManualEnrolment, ManualUnenrolment, UserCreate, UserSearchCriteria
 import httpx
 
 
@@ -800,4 +800,34 @@ async def test_get_site_info(moodle_client):
         assert result["sitename"] == "Test Moodle Site"
         assert "functions" in result
         assert len(result["functions"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_manual_unenrol_users(moodle_client):
+    """Base case test for manual_unenrol_users.
+
+    Ensures:
+    - correct webservice function is invoked,
+    - enrolments are converted to dictionaries and passed correctly,
+    - returns empty dict on success (null/None from API).
+    """
+    expected_func = "enrol_manual_unenrol_users"
+    unenrolment = ManualUnenrolment(userid=5, courseid=42)
+    expected_enrolments = [unenrolment.to_moodle_dict()]
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        # Moodle returns null/None on success; protocol.manual_unenrol_users maps None -> {}
+        mock_call.return_value = None
+
+        result = await moodle_client.manual_unenrol_users([unenrolment])
+
+        # Verify the Moodle function name and parameters were passed correctly
+        mock_call.assert_called_once_with(
+            expected_func,
+            enrolments=expected_enrolments
+        )
+
+        # Verify the result is an empty dict on success
+        assert isinstance(result, dict)
+        assert result == {}
 

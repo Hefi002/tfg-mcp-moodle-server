@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.session import ServerSession
 from .protocol import MoodleClient
-from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, UserCreate, UserSearchCriteria
+from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, ManualUnenrolment, UserCreate, UserSearchCriteria
 from .utils.logger import get_logger
 
 # Load environment variables
@@ -1128,6 +1128,93 @@ async def get_site_info(
 
     except Exception as e:
         await ctx.error(f"Error fetching site info: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def manual_unenrol_users(
+    ctx: Context[ServerSession, MoodleClient],
+    enrolments: list[ManualUnenrolment]
+) -> dict[str, Any]:
+    """Manually unenrol users from courses.
+
+    Removes user enrolments from courses. This can either remove specific roles
+    or completely unenrol the user by removing all their roles from the course.
+    This operation is permanent and cannot be undone through this function.
+
+    Args:
+        enrolments: List of ManualUnenrolment objects. Each unenrolment must have:
+                   Required fields:
+                   - userid: User ID to unenrol
+                   - courseid: Course ID from which to unenrol the user
+                   
+                   Optional field:
+                   - roleid: Specific role ID to remove. If not specified,
+                            ALL roles will be removed, completely unenrolling
+                            the user from the course.
+
+    Returns:
+        Dictionary result. An empty dictionary ({}) indicates success.
+        On error, an exception is raised (e.g., invalid_parameter_exception).
+
+    Examples:
+        # Completely unenrol user 5 from course 10 (remove all roles)
+        enrolments = [ManualUnenrolment(userid=5, courseid=10)]
+        result = manual_unenrol_users(enrolments=enrolments)
+        
+        # Remove only the student role (role 5) for user 5 in course 10
+        # User will remain enrolled with other roles if they have any
+        enrolments = [ManualUnenrolment(userid=5, courseid=10, roleid=5)]
+        result = manual_unenrol_users(enrolments=enrolments)
+        
+        # Unenrol multiple users from the same course
+        enrolments = [
+            ManualUnenrolment(userid=5, courseid=10),
+            ManualUnenrolment(userid=6, courseid=10),
+            ManualUnenrolment(userid=7, courseid=10)
+        ]
+        result = manual_unenrol_users(enrolments=enrolments)
+        
+        # Mix of complete and partial unenrolments
+        enrolments = [
+            ManualUnenrolment(userid=5, courseid=10),  # Complete unenrolment
+            ManualUnenrolment(userid=6, courseid=10, roleid=5)  # Remove only role 5
+        ]
+        result = manual_unenrol_users(enrolments=enrolments)
+
+    Important Notes:
+        - If roleid is not specified, the user will be COMPLETELY unenrolled
+          from the course (all roles removed)
+        - If roleid is specified, only that specific role will be removed.
+          The user will remain enrolled if they have other roles in the course
+        - This operation requires appropriate permissions (typically teacher
+          or manager role in the course)
+        - Attempting to unenrol a user who is not enrolled will raise an error
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Processing {len(enrolments)} unenrolment operation(s)...")
+
+    try:
+        result = await client.manual_unenrol_users(enrolments)
+        
+        # Count operations by type (check if roleid is None)
+        complete_unenrolments = sum(1 for e in enrolments if e.roleid is None)
+        partial_unenrolments = len(enrolments) - complete_unenrolments
+        
+        if complete_unenrolments > 0:
+            await ctx.info(f"Complete unenrolments (all roles removed): {complete_unenrolments}")
+        if partial_unenrolments > 0:
+            await ctx.info(f"Partial unenrolments (specific role removed): {partial_unenrolments}")
+        
+        # Empty result means success
+        if not result or result == {}:
+            await ctx.info("Successfully processed all unenrolment operations")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error unenrolling users: {str(e)}")
         raise
 
 
