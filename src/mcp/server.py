@@ -834,6 +834,103 @@ async def get_course_completion_status(
         raise
 
 
+@mcp.tool()
+async def get_activities_completion_status(
+    ctx: Context[ServerSession, MoodleClient],
+    courseid: int,
+    userid: int
+) -> dict[str, Any]:
+    """Get activities completion status for a user in a course.
+
+    Returns the completion status of all activities (modules) for a user
+    in a specific course, including detailed information about each activity's
+    completion state and tracking settings.
+    WARNING: If the user is not enrolled in the course, Moodle does not return an error,
+    but a list with all activities marked as incomplete (state=0).
+
+    Args:
+        courseid: Course ID (required).
+        userid: User ID (required).
+
+    Returns:
+        Dictionary containing:
+        - statuses: List of activity completion status objects:
+          * cmid: Course module ID
+          * modname: Module type name (e.g., 'quiz', 'assign', 'forum')
+          * instance: Activity instance ID within the module
+          * state: Completion state:
+            - 0: Incomplete
+            - 1: Complete
+            - 2: Complete and passed
+            - 3: Complete and failed
+          * timecompleted: Timestamp when completed (0 if not complete)
+          * tracking: Completion tracking type:
+            - 0: None
+            - 1: Manual
+            - 2: Automatic
+          * overrideby: User ID who overrode the status, or null (optional)
+          * hascompletion: 1 if completion enabled for this activity (optional)
+          * isautomatic: 1 if activity tracks completion automatically (optional)
+          * istrackeduser: 1 if completion tracked for this user (optional)
+          * uservisible: 1 if activity is visible to user (optional)
+          * isoverallcomplete: 1 if overall completion should be marked complete (optional)
+          * valueused: If completion status affects another activity availability (optional)
+          * details: List of completion rule details (optional):
+            - rulename: Name of the rule
+            - rulevalue: Object with status and description
+        - warnings: List of warning objects (optional):
+          * item, itemid, warningcode, message
+
+    Examples:
+        # Get all activities completion status for user 5 in course 10
+        activities = get_activities_completion_status(courseid=10, userid=5)
+        
+        # Check completion status of each activity
+        for activity in activities['statuses']:
+            state_text = [
+                "Incomplete",
+                "Complete",
+                "Complete and passed",
+                "Complete and failed"
+            ][activity['state']]
+            print(f"{activity['modname']} (ID {activity['cmid']}): {state_text}")
+        
+        # Filter only completed activities
+        completed = [a for a in activities['statuses'] if a['state'] >= 1]
+        print(f"Completed activities: {len(completed)}")
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Fetching activities completion status for user {userid} in course {courseid} from Moodle...")
+
+    try:
+        result = await client.get_activities_completion_status(courseid, userid)
+        
+        statuses = result.get("statuses", [])
+        warnings_count = len(result.get("warnings", []))
+        
+        # Count activities by state
+        incomplete = sum(1 for s in statuses if s.get("state", 0) == 0)
+        complete = sum(1 for s in statuses if s.get("state", 0) == 1)
+        passed = sum(1 for s in statuses if s.get("state", 0) == 2)
+        failed = sum(1 for s in statuses if s.get("state", 0) == 3)
+        
+        total = len(statuses)
+        await ctx.info(
+            f"Retrieved {total} activities: {complete} complete, {passed} passed, "
+            f"{failed} failed, {incomplete} incomplete"
+        )
+        
+        if warnings_count > 0:
+            await ctx.info(f"Note: {warnings_count} warning(s) returned")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error fetching activities completion status: {str(e)}")
+        raise
+
+
 def run_server():
     """Entry point to run the MCP server."""
     logger.info("Starting Moodle MCP Server")

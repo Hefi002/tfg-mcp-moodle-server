@@ -612,3 +612,51 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {"completionstatus": {"completed": 0, "aggregation": 1, "completions": []}, "warnings": []}
+
+    async def get_activities_completion_status(self, courseid: int, userid: int) -> dict[str, Any]:
+        """Get activities completion status for a user in a course.
+
+        Calls Moodle webservice function `core_completion_get_activities_completion_status`.
+
+        Args:
+            courseid: Course ID (required).
+            userid: User ID (required).
+
+        Returns:
+            Dictionary containing:
+            - statuses: List of activity completion status objects:
+              * cmid: Course module ID
+              * modname: Module type name (e.g., 'quiz', 'assign', 'forum')
+              * instance: Activity instance ID within the module
+              * state: Completion state:
+                - 0: Incomplete
+                - 1: Complete
+                - 2: Complete and passed
+                - 3: Complete and failed
+              * timecompleted: Timestamp when completed (0 if not complete)
+              * tracking: Completion tracking type:
+                - 0: None
+                - 1: Manual
+                - 2: Automatic
+              * overrideby: User ID who overrode the status, or null (optional)
+              * hascompletion: 1 if completion enabled for this activity (optional)
+              * isautomatic: 1 if activity tracks completion automatically (optional)
+              * istrackeduser: 1 if completion tracked for this user (optional)
+              * uservisible: 1 if activity is visible to user (optional)
+              * isoverallcomplete: 1 if overall completion should be marked complete (optional)
+              * valueused: If completion status affects another activity availability (optional)
+              * details: List of completion rule details (optional):
+                - rulename: Name of the rule
+                - rulevalue: Object with status and description
+            - warnings: List of warning objects (optional):
+              * item, itemid, warningcode, message
+        """
+        result = await self._call_function(
+            "core_completion_get_activities_completion_status",
+            courseid=courseid,
+            userid=userid
+        )
+
+        if isinstance(result, dict):
+            return result
+        return {"statuses": [], "warnings": []}
