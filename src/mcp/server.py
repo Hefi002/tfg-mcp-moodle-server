@@ -759,6 +759,81 @@ async def get_users_courses(
         raise
 
 
+@mcp.tool()
+async def get_course_completion_status(
+    ctx: Context[ServerSession, MoodleClient],
+    courseid: int,
+    userid: int
+) -> dict[str, Any]:
+    """Get course completion status for a user.
+
+    Returns the completion status of a user in a specific course,
+    including all completion criteria and their individual statuses.
+
+    Args:
+        courseid: Course ID (required).
+        userid: User ID (required).
+
+    Returns:
+        Dictionary containing:
+        - completionstatus: Completion status object:
+          * completed: 1 if course is complete for the user, 0 otherwise
+          * aggregation: Aggregation method for criteria:
+            - 1 (ALL): All criteria must be met
+            - 2 (ANY): At least one criterion must be met
+          * completions: List of detailed completion criteria:
+            - type: Criterion type code (numeric)
+            - title: Criterion title
+            - status: Status as readable text (e.g., "Yes", "No", "50%")
+            - complete: 1 if criterion is complete, 0 if not
+            - timecompleted: Timestamp when criterion was completed (0 if not complete)
+            - details: Additional details object:
+              * type: Criterion type description
+              * criteria: Specific criterion description
+              * requirement: Requirement description
+              * status: Extended status description (any text)
+        - warnings: List of warning objects (optional):
+          * item, itemid, warningcode, message
+
+    Examples:
+        # Get completion status for user 5 in course 10
+        status = get_course_completion_status(courseid=10, userid=5)
+        
+        # Check if user completed the course
+        if status['completionstatus']['completed'] == 1:
+            print("User completed the course!")
+        
+        # Check individual criteria
+        for criterion in status['completionstatus']['completions']:
+            print(f"{criterion['title']}: {criterion['status']}")
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Fetching completion status for user {userid} in course {courseid} from Moodle...")
+
+    try:
+        result = await client.get_course_completion_status(courseid, userid)
+        
+        completion_status = result.get("completionstatus", {})
+        is_completed = completion_status.get("completed", 0)
+        criteria_count = len(completion_status.get("completions", []))
+        warnings_count = len(result.get("warnings", []))
+        
+        if is_completed == 1:
+            await ctx.info(f"User {userid} has completed course {courseid} ({criteria_count} criteria)")
+        else:
+            await ctx.info(f"User {userid} has not completed course {courseid} ({criteria_count} criteria tracked)")
+        
+        if warnings_count > 0:
+            await ctx.info(f"Note: {warnings_count} warning(s) returned")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error fetching course completion status: {str(e)}")
+        raise
+
+
 def run_server():
     """Entry point to run the MCP server."""
     logger.info("Starting Moodle MCP Server")

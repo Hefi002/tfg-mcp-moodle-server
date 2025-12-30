@@ -643,3 +643,38 @@ async def test_get_users_courses(moodle_client):
         # Verify the returned list matches the API response
         assert isinstance(result, list)
         assert result == sample_courses_for_user
+
+
+@pytest.mark.asyncio
+async def test_get_course_completion_status(moodle_client):
+    """Base case test for get_course_completion_status.
+
+    Ensures:
+    - correct webservice function is invoked,
+    - courseid and userid are forwarded,
+    - returned value is propagated unchanged.
+    """
+    expected_func = "core_completion_get_course_completion_status"
+    courseid = 10
+    userid = 5
+    expected_result = {
+        "completionstatus": {"completed": 0, "aggregation": 1, "completions": []},
+        "warnings": []
+    }
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = expected_result
+
+        result = await moodle_client.get_course_completion_status(courseid, userid)
+
+        # Verify correct function and parameters
+        mock_call.assert_called_once_with(
+            expected_func,
+            courseid=courseid,
+            userid=userid
+        )
+
+        # Verify result propagated
+        assert isinstance(result, dict)
+        assert result == expected_result
+

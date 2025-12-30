@@ -574,3 +574,41 @@ class MoodleClient:
         if isinstance(result, list):
             return result
         return []
+
+    async def get_course_completion_status(self, courseid: int, userid: int) -> dict[str, Any]:
+        """Get course completion status for a user.
+
+        Calls Moodle webservice function `core_completion_get_course_completion_status`.
+
+        Args:
+            courseid: Course ID (required).
+            userid: User ID (required).
+
+        Returns:
+            Dictionary containing:
+            - completionstatus: Completion status object:
+              * completed: 1 if course is complete, 0 otherwise
+              * aggregation: Aggregation method (1=ALL criteria, 2=ANY criteria)
+              * completions: List of completion criteria objects:
+                - type: Criterion type code (numeric)
+                - title: Criterion title
+                - status: Status as readable text (e.g., "Yes", "No", "50%")
+                - complete: 1 if complete, 0 if not
+                - timecompleted: Timestamp when completed (0 if not complete)
+                - details: Additional details object:
+                  * type: Criterion type description
+                  * criteria: Specific criterion description
+                  * requirement: Requirement description
+                  * status: Extended status description
+            - warnings: List of warning objects (optional):
+              * item, itemid, warningcode, message
+        """
+        result = await self._call_function(
+            "core_completion_get_course_completion_status",
+            courseid=courseid,
+            userid=userid
+        )
+
+        if isinstance(result, dict):
+            return result
+        return {"completionstatus": {"completed": 0, "aggregation": 1, "completions": []}, "warnings": []}
