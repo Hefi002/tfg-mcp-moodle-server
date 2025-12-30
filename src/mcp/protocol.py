@@ -660,3 +660,43 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {"statuses": [], "warnings": []}
+
+    async def update_activity_completion_status_manually(
+        self,
+        cmid: int,
+        completed: int
+    ) -> dict[str, Any]:
+        """Update activity completion status manually for the current user.
+
+        Calls Moodle webservice function `core_completion_update_activity_completion_status_manually`.
+        Only works for activities with manual completion tracking enabled.
+
+        Args:
+            cmid: Course module ID (activity ID) (required).
+            completed: Completion status to set (required):
+                      - 1: Mark activity as complete
+                      - 0: Mark activity as incomplete
+
+        Returns:
+            Dictionary containing:
+            - status: 1 if operation was successful, 0 if failed
+            - warnings: List of warning objects (optional):
+              * item: Item identifier (e.g., 'cmid')
+              * itemid: Item ID value
+              * warningcode: Warning code identifier
+              * message: Human-readable warning message
+              
+              Common warnings:
+              - Activity does not have manual completion tracking enabled
+              - User does not have permission to update completion
+              - Activity or course module does not exist
+        """
+        result = await self._call_function(
+            "core_completion_update_activity_completion_status_manually",
+            cmid=cmid,
+            completed=completed
+        )
+
+        if isinstance(result, dict):
+            return result
+        return {"status": 0, "warnings": []}

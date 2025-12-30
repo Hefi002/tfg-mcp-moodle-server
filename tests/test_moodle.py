@@ -714,3 +714,39 @@ async def test_get_activities_completion_status(moodle_client):
         assert isinstance(result, dict)
         assert result == expected_result
 
+
+@pytest.mark.asyncio
+async def test_update_activity_completion_status_manually(moodle_client):
+    """Base case test for update_activity_completion_status_manually.
+
+    Ensures:
+    - correct webservice function is invoked,
+    - cmid and completed parameters are forwarded,
+    - returned value is propagated unchanged.
+    """
+    expected_func = "core_completion_update_activity_completion_status_manually"
+    cmid = 42
+    completed = 1
+    expected_result = {
+        "status": 1,
+        "warnings": []
+    }
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = expected_result
+
+        result = await moodle_client.update_activity_completion_status_manually(cmid, completed)
+
+        # Verify correct function and parameters
+        mock_call.assert_called_once_with(
+            expected_func,
+            cmid=cmid,
+            completed=completed
+        )
+
+        # Verify result propagated
+        assert isinstance(result, dict)
+        assert result == expected_result
+        assert result["status"] == 1
+        assert "warnings" in result
+

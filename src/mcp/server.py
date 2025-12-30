@@ -931,6 +931,85 @@ async def get_activities_completion_status(
         raise
 
 
+@mcp.tool()
+async def update_activity_completion_status_manually(
+    ctx: Context[ServerSession, MoodleClient],
+    cmid: int,
+    completed: int
+) -> dict[str, Any]:
+    """Update activity completion status manually for the current user.
+
+    Manually marks an activity as complete or incomplete for the current user.
+    This only works for activities that have manual completion tracking enabled.
+    If the activity uses automatic completion tracking, this operation will fail
+    with a warning.
+
+    Args:
+        cmid: Course module ID (activity ID) (required).
+              This is the unique identifier for the activity within the course.
+        completed: Completion status to set (required):
+                  - 1: Mark the activity as complete
+                  - 0: Mark the activity as incomplete
+
+    Returns:
+        Dictionary containing:
+        - status: Operation result:
+          * 1: Operation was successful
+          * 0: Operation failed
+        - warnings: List of warning objects (optional):
+          * item: Item type identifier (e.g., 'cmid')
+          * itemid: Specific item ID that caused the warning
+          * warningcode: Code identifying the type of warning
+          * message: Human-readable description of the warning
+          
+          Common warnings include:
+          - Activity does not have manual completion tracking enabled
+          - User does not have permission to update completion status
+          - Activity or course module does not exist
+          - User is not enrolled in the course containing the activity
+
+    Examples:
+        # Mark activity with cmid 42 as complete
+        result = update_activity_completion_status_manually(cmid=42, completed=1)
+        if result['status'] == 1:
+            print("Activity marked as complete!")
+        
+        # Undo completion for activity with cmid 42
+        result = update_activity_completion_status_manually(cmid=42, completed=0)
+        
+        # Check for warnings
+        if result.get('warnings'):
+            for warning in result['warnings']:
+                print(f"Warning: {warning['message']}")
+    """
+    client = ctx.request_context.lifespan_context
+
+    status_text = "complete" if completed == 1 else "incomplete"
+    await ctx.info(f"Updating activity {cmid} completion status to {status_text}...")
+
+    try:
+        result = await client.update_activity_completion_status_manually(cmid, completed)
+        
+        operation_status = result.get("status", 0)
+        warnings = result.get("warnings", [])
+        
+        if operation_status == 1:
+            await ctx.info(f"Successfully updated activity {cmid} to {status_text}")
+        else:
+            await ctx.info(f"Failed to update activity {cmid} (status={operation_status})")
+        
+        if warnings:
+            await ctx.info(f"Note: {len(warnings)} warning(s) returned")
+            for warning in warnings:
+                await ctx.info(f"  - {warning.get('message', 'Unknown warning')}")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error updating activity completion status: {str(e)}")
+        raise
+
+
 def run_server():
     """Entry point to run the MCP server."""
     logger.info("Starting Moodle MCP Server")
