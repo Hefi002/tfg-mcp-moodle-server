@@ -1084,3 +1084,89 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {}
+
+    async def get_course_module(self, cmid: int) -> dict[str, Any]:
+        """Get detailed information about a specific course module.
+
+        Calls Moodle webservice function `core_course_get_course_module`.
+        Returns comprehensive information about a course module (activity or resource),
+        including identification, visibility, completion, grading settings, and more.
+
+        Args:
+            cmid: Course module ID (required).
+
+        Returns:
+            Dictionary containing:
+            - cm: Course module object with detailed information:
+              Identification and Location:
+              * id: Course module ID
+              * course: Course ID
+              * module: Module type ID in database
+              * modname: Module component name (e.g., 'forum', 'assign', 'quiz')
+              * instance: Specific activity/resource instance ID
+              * name: Activity name
+              * section: Section ID
+              * sectionnum: Section number (visible order)
+              * added: Timestamp when added (optional)
+              * idnumber: Module identification number (optional)
+              
+              Visibility and Access:
+              * visible: 1 if visible to students (optional)
+              * visibleoncoursepage: 1 if visible on course page (optional)
+              * visibleold: Previous visibility state (optional)
+              * availability: Availability configuration in JSON format (optional)
+              * downloadcontent: Value indicating if content is downloadable (optional)
+              * showdescription: 1 if description should be shown on course page (optional)
+              
+              Groups:
+              * groupmode: Group mode (0=NOGROUPS, 1=SEPARATEGROUPS, 2=VISIBLEGROUPS)
+              * groupingid: Assigned grouping ID
+              
+              Completion:
+              * completion: Completion status (0=disabled, 1=enabled, 2=enabled with conditions)
+              * completionexpected: Timestamp when completion is expected (optional)
+              * completionview: 1 if viewing activity is required for completion (optional)
+              * completiongradeitemnumber: Grade item number used for completion (optional)
+              * completionpassgrade: 1 if passing grade required for completion (optional)
+              
+              Grading:
+              * grade: Maximum grade (numeric) or scale ID (optional)
+              * gradepass: Minimum passing grade (as numeric string) (optional)
+              * gradecat: Grade category ID (optional)
+              * scale: Scale items (if scale is used), comma-separated list (optional)
+              * advancedgrading: List of advanced grading configurations (rubrics, guides) (optional)
+                Each contains: area, method
+              * outcomes: List of linked learning outcomes (optional)
+                Each contains: id, name, scale
+              
+              Format and Presentation:
+              * indent: Indentation level (optional)
+              * score: Score (system-specific purpose) (optional)
+            
+            - warnings: List of warning objects (optional):
+              * item, itemid, warningcode, message
+
+        Examples:
+            # Get information about a specific course module
+            module_info = await get_course_module(cmid=42)
+            print(f"Module: {module_info['cm']['name']}")
+            print(f"Type: {module_info['cm']['modname']}")
+            print(f"Visible: {module_info['cm'].get('visible', 0)}")
+            
+            # Check completion settings
+            cm = module_info['cm']
+            if cm['completion'] > 0:
+                print("Completion tracking is enabled")
+                if cm.get('completionview'):
+                    print("  - Requires viewing the activity")
+                if cm.get('completionpassgrade'):
+                    print("  - Requires passing grade")
+        """
+        result = await self._call_function(
+            "core_course_get_course_module",
+            cmid=cmid
+        )
+
+        if isinstance(result, dict):
+            return result
+        return {"cm": {}, "warnings": []}

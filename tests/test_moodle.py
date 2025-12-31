@@ -1138,3 +1138,101 @@ async def test_get_grade_items_user_report(moodle_client):
         assert len(result["usergrades"]) == 1
         assert result["usergrades"][0]["userfullname"] == "John Doe"
 
+
+@pytest.mark.asyncio
+async def test_get_course_module(moodle_client):
+    """Base case test for get_course_module.
+
+    Ensures:
+    - correct webservice function is invoked,
+    - cmid parameter is passed correctly,
+    - returned value is propagated unchanged,
+    - cm object contains expected fields.
+    """
+    expected_func = "core_course_get_course_module"
+    cmid = 42
+    expected_result = {
+        "cm": {
+            # Identification and Location
+            "id": 42,
+            "course": 10,
+            "module": 15,
+            "modname": "assign",
+            "instance": 5,
+            "name": "Assignment 1: Introduction to Programming",
+            "section": 3,
+            "sectionnum": 1,
+            "added": 1640000000,
+            "idnumber": "ASSIGN001",
+            # Visibility and Access
+            "visible": 1,
+            "visibleoncoursepage": 1,
+            "visibleold": 1,
+            "availability": '{"op":"&","c":[],"showc":[]}',
+            "downloadcontent": 1,
+            "showdescription": 1,
+            # Groups
+            "groupmode": 0,
+            "groupingid": 0,
+            # Completion
+            "completion": 2,
+            "completionexpected": 1672000000,
+            "completionview": 1,
+            "completiongradeitemnumber": 0,
+            "completionpassgrade": 1,
+            # Grading
+            "grade": 100.0,
+            "gradepass": "50.00",
+            "gradecat": 1,
+            "scale": None,
+            "advancedgrading": [
+                {"area": "submissions", "method": "rubric"}
+            ],
+            "outcomes": [
+                {"id": 1, "name": "Critical Thinking", "scale": "1,2,3,4,5"}
+            ],
+            # Format and Presentation
+            "indent": 0,
+            "score": 0
+        },
+        "warnings": []
+    }
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = expected_result
+
+        result = await moodle_client.get_course_module(cmid)
+
+        # Verify correct function and parameters
+        mock_call.assert_called_once_with(
+            expected_func,
+            cmid=cmid
+        )
+
+        # Verify result propagated
+        assert isinstance(result, dict)
+        assert result == expected_result
+        assert "cm" in result
+        assert "warnings" in result
+        
+        # Verify cm object structure
+        cm = result["cm"]
+        assert cm["id"] == 42
+        assert cm["modname"] == "assign"
+        assert cm["name"] == "Assignment 1: Introduction to Programming"
+        assert cm["course"] == 10
+        assert cm["visible"] == 1
+        assert cm["completion"] == 2
+        assert cm["groupmode"] == 0
+        assert cm["grade"] == 100.0
+        assert cm["gradepass"] == "50.00"
+        
+        # Verify optional fields
+        assert "advancedgrading" in cm
+        assert len(cm["advancedgrading"]) == 1
+        assert cm["advancedgrading"][0]["method"] == "rubric"
+        
+        assert "outcomes" in cm
+        assert len(cm["outcomes"]) == 1
+        assert cm["outcomes"][0]["name"] == "Critical Thinking"
+

@@ -1566,6 +1566,77 @@ async def manual_unenrol_users(
         raise
 
 
+@mcp.tool()
+async def get_course_module(
+    ctx: Context[ServerSession, MoodleClient],
+    cmid: int
+) -> dict[str, Any]:
+    """Get detailed information about a specific course module.
+
+    Returns comprehensive information about a course module
+    (activity or resource), including identification, visibility,
+    completion settings, grading configuration, and more.
+
+    Args:
+        cmid: Course module ID (required).
+
+    Returns:
+        Dictionary containing:
+        - cm: Course module object with complete information:
+          * Identification: id, course, module, modname, instance, name, section, etc.
+          * Visibility: visible, visibleoncoursepage, availability, etc.
+          * Groups: groupmode, groupingid
+          * Completion: completion, completionview, completionpassgrade, etc.
+          * Grading: grade, gradepass, gradecat, scale, advancedgrading, outcomes
+          * Format: indent, score
+        - warnings: List of warning objects (optional)
+
+    Examples:
+        # Get full information about a course module
+        info = get_course_module(cmid=42)
+        
+        # Check if module is visible
+        if info['cm'].get('visible', 0) == 1:
+            print("Module is visible to students")
+        
+        # Check completion requirements
+        cm = info['cm']
+        if cm['completion'] > 0:
+            print("Has completion tracking")
+            if cm.get('completionview'):
+                print("Requires viewing")
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Fetching course module with cmid={cmid}...")
+
+    try:
+        result = await client.get_course_module(cmid)
+        
+        # Log key information about the module
+        if 'cm' in result and result['cm']:
+            cm = result['cm']
+            await ctx.info(
+                f"Retrieved module: '{cm.get('name', 'Unknown')}' "
+                f"(type: {cm.get('modname', 'unknown')}, "
+                f"course: {cm.get('course', 'unknown')})"
+            )
+            
+            # Log completion status if available
+            if cm.get('completion', 0) > 0:
+                await ctx.info("Module has completion tracking enabled")
+        
+        # Log warnings if any
+        if result.get('warnings'):
+            await ctx.info(f"Received {len(result['warnings'])} warning(s)")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error fetching course module: {str(e)}")
+        raise
+
+
 def run_server():
     """Entry point to run the MCP server."""
     logger.info("Starting Moodle MCP Server")
