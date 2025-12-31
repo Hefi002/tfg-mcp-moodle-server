@@ -119,6 +119,10 @@ class MoodleClient:
             logger.error(f"HTTP error calling Moodle: {e}")
             raise
 
+    # ============================================================================
+    # Course Calls
+    # ============================================================================
+
     async def get_courses(self, courseids: list[int] | None = None) -> list[dict[str, Any]]:
         """Get courses from Moodle.
 
@@ -174,55 +178,6 @@ class MoodleClient:
             "core_course_update_courses",
             courses=courses_data
         )
-        if isinstance(result, dict):
-            return result
-        return {}
-
-    async def manual_unenrol_users(self, enrolments: list[ManualUnenrolment]) -> dict[str, Any]:
-        """Manually unenrol users from courses.
-
-        Calls Moodle webservice function `enrol_manual_unenrol_users`.
-        Removes user enrolments from courses. Can remove specific roles or
-        completely unenrol the user by removing all roles.
-
-        Args:
-            enrolments: List of ManualUnenrolment objects. Each unenrolment must have:
-                       Required fields:
-                       - userid: User ID to unenrol
-                       - courseid: Course ID from which to unenrol the user
-                       
-                       Optional field:
-                       - roleid: Specific role ID to remove. If not specified,
-                                all roles will be removed (complete unenrolment)
-
-        Returns:
-            Result dictionary. An empty result ({}) indicates success.
-            On error, raises an exception (e.g., invalid_parameter_exception).
-            
-        Examples:
-            # Completely unenrol user 5 from course 10 (remove all roles)
-            unenrolments = [ManualUnenrolment(userid=5, courseid=10)]
-            
-            # Remove only specific role (e.g., student role 5) for user 5 in course 10
-            unenrolments = [ManualUnenrolment(userid=5, courseid=10, roleid=5)]
-            
-            # Unenrol multiple users
-            unenrolments = [
-                ManualUnenrolment(userid=5, courseid=10),
-                ManualUnenrolment(userid=6, courseid=10)
-            ]
-        """
-        # Convert ManualUnenrolment models to dictionaries
-        enrolments_data = [enrolment.to_moodle_dict() for enrolment in enrolments]
-
-        result = await self._call_function(
-            "enrol_manual_unenrol_users",
-            enrolments=enrolments_data
-        )
-
-        # The API typically returns null/None on success, but we'll handle both cases
-        if result is None:
-            return {}
         if isinstance(result, dict):
             return result
         return {}
@@ -363,6 +318,96 @@ class MoodleClient:
         """Close the HTTP client."""
         await self.client.aclose()
 
+    async def get_course_module(self, cmid: int) -> dict[str, Any]:
+        """Get detailed information about a specific course module.
+
+        Calls Moodle webservice function `core_course_get_course_module`.
+        Returns comprehensive information about a course module (activity or resource),
+        including identification, visibility, completion, grading settings, and more.
+
+        Args:
+            cmid: Course module ID (required).
+
+        Returns:
+            Dictionary containing:
+            - cm: Course module object with detailed information:
+              Identification and Location:
+              * id: Course module ID
+              * course: Course ID
+              * module: Module type ID in database
+              * modname: Module component name (e.g., 'forum', 'assign', 'quiz')
+              * instance: Specific activity/resource instance ID
+              * name: Activity name
+              * section: Section ID
+              * sectionnum: Section number (visible order)
+              * added: Timestamp when added (optional)
+              * idnumber: Module identification number (optional)
+
+              Visibility and Access:
+              * visible: 1 if visible to students (optional)
+              * visibleoncoursepage: 1 if visible on course page (optional)
+              * visibleold: Previous visibility state (optional)
+              * availability: Availability configuration in JSON format (optional)
+              * downloadcontent: Value indicating if content is downloadable (optional)
+              * showdescription: 1 if description should be shown on course page (optional)
+
+              Groups:
+              * groupmode: Group mode (0=NOGROUPS, 1=SEPARATEGROUPS, 2=VISIBLEGROUPS)
+              * groupingid: Assigned grouping ID
+
+              Completion:
+              * completion: Completion status (0=disabled, 1=enabled, 2=enabled with conditions)
+              * completionexpected: Timestamp when completion is expected (optional)
+              * completionview: 1 if viewing activity is required for completion (optional)
+              * completiongradeitemnumber: Grade item number used for completion (optional)
+              * completionpassgrade: 1 if passing grade required for completion (optional)
+
+              Grading:
+              * grade: Maximum grade (numeric) or scale ID (optional)
+              * gradepass: Minimum passing grade (as numeric string) (optional)
+              * gradecat: Grade category ID (optional)
+              * scale: Scale items (if scale is used), comma-separated list (optional)
+              * advancedgrading: List of advanced grading configurations (rubrics, guides) (optional)
+                Each contains: area, method
+              * outcomes: List of linked learning outcomes (optional)
+                Each contains: id, name, scale
+
+              Format and Presentation:
+              * indent: Indentation level (optional)
+              * score: Score (system-specific purpose) (optional)
+
+            - warnings: List of warning objects (optional):
+              * item, itemid, warningcode, message
+
+        Examples:
+            # Get information about a specific course module
+            module_info = await get_course_module(cmid=42)
+            print(f"Module: {module_info['cm']['name']}")
+            print(f"Type: {module_info['cm']['modname']}")
+            print(f"Visible: {module_info['cm'].get('visible', 0)}")
+
+            # Check completion settings
+            cm = module_info['cm']
+            if cm['completion'] > 0:
+                print("Completion tracking is enabled")
+                if cm.get('completionview'):
+                    print("  - Requires viewing the activity")
+                if cm.get('completionpassgrade'):
+                    print("  - Requires passing grade")
+        """
+        result = await self._call_function(
+            "core_course_get_course_module",
+            cmid=cmid
+        )
+
+        if isinstance(result, dict):
+            return result
+        return {"cm": {}, "warnings": []}
+
+    # ============================================================================
+    # Enrol Calls
+    # ============================================================================
+
     async def get_course_enrolment_methods(self, courseid: int) -> list[dict[str, Any]]:
         """Get enrolment methods available for a given course.
 
@@ -467,6 +512,59 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {}
+
+    async def manual_unenrol_users(self, enrolments: list[ManualUnenrolment]) -> dict[str, Any]:
+        """Manually unenrol users from courses.
+
+        Calls Moodle webservice function `enrol_manual_unenrol_users`.
+        Removes user enrolments from courses. Can remove specific roles or
+        completely unenrol the user by removing all roles.
+
+        Args:
+            enrolments: List of ManualUnenrolment objects. Each unenrolment must have:
+                       Required fields:
+                       - userid: User ID to unenrol
+                       - courseid: Course ID from which to unenrol the user
+
+                       Optional field:
+                       - roleid: Specific role ID to remove. If not specified,
+                                all roles will be removed (complete unenrolment)
+
+        Returns:
+            Result dictionary. An empty result ({}) indicates success.
+            On error, raises an exception (e.g., invalid_parameter_exception).
+
+        Examples:
+            # Completely unenrol user 5 from course 10 (remove all roles)
+            unenrolments = [ManualUnenrolment(userid=5, courseid=10)]
+
+            # Remove only specific role (e.g., student role 5) for user 5 in course 10
+            unenrolments = [ManualUnenrolment(userid=5, courseid=10, roleid=5)]
+
+            # Unenrol multiple users
+            unenrolments = [
+                ManualUnenrolment(userid=5, courseid=10),
+                ManualUnenrolment(userid=6, courseid=10)
+            ]
+        """
+        # Convert ManualUnenrolment models to dictionaries
+        enrolments_data = [enrolment.to_moodle_dict() for enrolment in enrolments]
+
+        result = await self._call_function(
+            "enrol_manual_unenrol_users",
+            enrolments=enrolments_data
+        )
+
+        # The API typically returns null/None on success, but we'll handle both cases
+        if result is None:
+            return {}
+        if isinstance(result, dict):
+            return result
+        return {}
+
+    # ============================================================================
+    # User Calls
+    # ============================================================================
 
     async def create_users(self, users: list[UserCreate]) -> list[dict[str, Any]]:
         """Create one or more users in Moodle.
@@ -624,6 +722,10 @@ class MoodleClient:
             return result
         return []
 
+    # ============================================================================
+    # Completion Calls
+    # ============================================================================
+
     async def get_course_completion_status(self, courseid: int, userid: int) -> dict[str, Any]:
         """Get course completion status for a user.
 
@@ -709,6 +811,50 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {"statuses": [], "warnings": []}
+
+    async def update_activity_completion_status_manually(
+            self,
+            cmid: int,
+            completed: int
+    ) -> dict[str, Any]:
+        """Update activity completion status manually for the current user.
+
+        Calls Moodle webservice function `core_completion_update_activity_completion_status_manually`.
+        Only works for activities with manual completion tracking enabled.
+
+        Args:
+            cmid: Course module ID (activity ID) (required).
+            completed: Completion status to set (required):
+                      - 1: Mark activity as complete
+                      - 0: Mark activity as incomplete
+
+        Returns:
+            Dictionary containing:
+            - status: 1 if operation was successful, 0 if failed
+            - warnings: List of warning objects (optional):
+              * item: Item identifier (e.g., 'cmid')
+              * itemid: Item ID value
+              * warningcode: Warning code identifier
+              * message: Human-readable warning message
+
+              Common warnings:
+              - Activity does not have manual completion tracking enabled
+              - User does not have permission to update completion
+              - Activity or course module does not exist
+        """
+        result = await self._call_function(
+            "core_completion_update_activity_completion_status_manually",
+            cmid=cmid,
+            completed=completed
+        )
+
+        if isinstance(result, dict):
+            return result
+        return {"status": 0, "warnings": []}
+
+    # ============================================================================
+    # Grades Calls
+    # ============================================================================
 
     async def update_grades(
         self,
@@ -811,86 +957,6 @@ class MoodleClient:
             return result
         return {"gradeItems": [], "warnings": []}
 
-    async def get_grade_tree(self, courseid: int) -> dict[str, Any]:
-        """Get hierarchical grade structure (tree) for a course.
-
-        Calls Moodle webservice function `core_grades_get_grade_tree`.
-        Returns the complete gradebook structure for a course as a dictionary.
-
-        Args:
-            courseid: Course ID (required).
-
-        Returns:
-            Dictionary containing the complete gradebook structure:
-            - children: List of grade categories and items
-            - Grade categories and their hierarchy
-            - Grade items within each category
-            - Aggregation methods and weights
-            - Grade scales and maximum/minimum values
-            - Hidden/visible status of items
-            - And other gradebook configuration details
-        """
-        result = await self._call_function(
-            "core_grades_get_grade_tree",
-            courseid=courseid
-        )
-
-        # Parse JSON string if necessary (Moodle may return a JSON string)
-        if isinstance(result, str):
-            import json
-            try:
-                return json.loads(result)
-            except json.JSONDecodeError:
-                logger.error(f"Failed to parse grade tree JSON: {result[:100]}")
-                return {}
-        
-        # Already a dict, return as-is
-        if isinstance(result, dict):
-            return result
-        
-        # Unexpected type, return empty dict
-        return {}
-
-    async def get_feedback(
-        self,
-        courseid: int,
-        userid: int,
-        itemid: int
-    ) -> dict[str, Any]:
-        """Get feedback data for a specific user's grade in a grade item.
-
-        Calls Moodle webservice function `core_grades_get_feedback`.
-
-        Args:
-            courseid: Course ID (required).
-            userid: User (student) ID (required).
-            itemid: Specific grade item ID (required).
-
-        Returns:
-            Dictionary containing:
-            - feedbacktext: Full feedback text (comment) for this grade
-            - title: Title of the grade item
-            - fullname: Full name of the student
-            - picture: String representing student's image (likely URL or identifier)
-            - additionalfield: Additional user field (email or ID number)
-        """
-        result = await self._call_function(
-            "core_grades_get_feedback",
-            courseid=courseid,
-            userid=userid,
-            itemid=itemid
-        )
-
-        if isinstance(result, dict):
-            return result
-        return {
-            "feedbacktext": "",
-            "title": "",
-            "fullname": "",
-            "picture": "",
-            "additionalfield": ""
-        }
-
     async def get_grade_items_user_report(
             self,
             courseid: int,
@@ -978,45 +1044,89 @@ class MoodleClient:
             return result
         return {"usergrades": [], "warnings": []}
 
-    async def update_activity_completion_status_manually(
-        self,
-        cmid: int,
-        completed: int
-    ) -> dict[str, Any]:
-        """Update activity completion status manually for the current user.
+    async def get_grade_tree(self, courseid: int) -> dict[str, Any]:
+        """Get hierarchical grade structure (tree) for a course.
 
-        Calls Moodle webservice function `core_completion_update_activity_completion_status_manually`.
-        Only works for activities with manual completion tracking enabled.
+        Calls Moodle webservice function `core_grades_get_grade_tree`.
+        Returns the complete gradebook structure for a course as a dictionary.
 
         Args:
-            cmid: Course module ID (activity ID) (required).
-            completed: Completion status to set (required):
-                      - 1: Mark activity as complete
-                      - 0: Mark activity as incomplete
+            courseid: Course ID (required).
+
+        Returns:
+            Dictionary containing the complete gradebook structure:
+            - children: List of grade categories and items
+            - Grade categories and their hierarchy
+            - Grade items within each category
+            - Aggregation methods and weights
+            - Grade scales and maximum/minimum values
+            - Hidden/visible status of items
+            - And other gradebook configuration details
+        """
+        result = await self._call_function(
+            "core_grades_get_grade_tree",
+            courseid=courseid
+        )
+
+        # Parse JSON string if necessary (Moodle may return a JSON string)
+        if isinstance(result, str):
+            import json
+            try:
+                return json.loads(result)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse grade tree JSON: {result[:100]}")
+                return {}
+        
+        # Already a dict, return as-is
+        if isinstance(result, dict):
+            return result
+        
+        # Unexpected type, return empty dict
+        return {}
+
+    async def get_feedback(
+        self,
+        courseid: int,
+        userid: int,
+        itemid: int
+    ) -> dict[str, Any]:
+        """Get feedback data for a specific user's grade in a grade item.
+
+        Calls Moodle webservice function `core_grades_get_feedback`.
+
+        Args:
+            courseid: Course ID (required).
+            userid: User (student) ID (required).
+            itemid: Specific grade item ID (required).
 
         Returns:
             Dictionary containing:
-            - status: 1 if operation was successful, 0 if failed
-            - warnings: List of warning objects (optional):
-              * item: Item identifier (e.g., 'cmid')
-              * itemid: Item ID value
-              * warningcode: Warning code identifier
-              * message: Human-readable warning message
-              
-              Common warnings:
-              - Activity does not have manual completion tracking enabled
-              - User does not have permission to update completion
-              - Activity or course module does not exist
+            - feedbacktext: Full feedback text (comment) for this grade
+            - title: Title of the grade item
+            - fullname: Full name of the student
+            - picture: String representing student's image (likely URL or identifier)
+            - additionalfield: Additional user field (email or ID number)
         """
         result = await self._call_function(
-            "core_completion_update_activity_completion_status_manually",
-            cmid=cmid,
-            completed=completed
+            "core_grades_get_feedback",
+            courseid=courseid,
+            userid=userid,
+            itemid=itemid
         )
 
         if isinstance(result, dict):
             return result
-        return {"status": 0, "warnings": []}
+        return {
+            "feedbacktext": "",
+            "title": "",
+            "fullname": "",
+            "picture": "",
+            "additionalfield": ""
+        }
+
+    # ============================================================================
+    # Webservice Calls
+    # ============================================================================
 
     async def get_site_info(self) -> dict[str, Any]:
         """Get site information, current user details and available webservice functions.
@@ -1085,88 +1195,3 @@ class MoodleClient:
             return result
         return {}
 
-    async def get_course_module(self, cmid: int) -> dict[str, Any]:
-        """Get detailed information about a specific course module.
-
-        Calls Moodle webservice function `core_course_get_course_module`.
-        Returns comprehensive information about a course module (activity or resource),
-        including identification, visibility, completion, grading settings, and more.
-
-        Args:
-            cmid: Course module ID (required).
-
-        Returns:
-            Dictionary containing:
-            - cm: Course module object with detailed information:
-              Identification and Location:
-              * id: Course module ID
-              * course: Course ID
-              * module: Module type ID in database
-              * modname: Module component name (e.g., 'forum', 'assign', 'quiz')
-              * instance: Specific activity/resource instance ID
-              * name: Activity name
-              * section: Section ID
-              * sectionnum: Section number (visible order)
-              * added: Timestamp when added (optional)
-              * idnumber: Module identification number (optional)
-              
-              Visibility and Access:
-              * visible: 1 if visible to students (optional)
-              * visibleoncoursepage: 1 if visible on course page (optional)
-              * visibleold: Previous visibility state (optional)
-              * availability: Availability configuration in JSON format (optional)
-              * downloadcontent: Value indicating if content is downloadable (optional)
-              * showdescription: 1 if description should be shown on course page (optional)
-              
-              Groups:
-              * groupmode: Group mode (0=NOGROUPS, 1=SEPARATEGROUPS, 2=VISIBLEGROUPS)
-              * groupingid: Assigned grouping ID
-              
-              Completion:
-              * completion: Completion status (0=disabled, 1=enabled, 2=enabled with conditions)
-              * completionexpected: Timestamp when completion is expected (optional)
-              * completionview: 1 if viewing activity is required for completion (optional)
-              * completiongradeitemnumber: Grade item number used for completion (optional)
-              * completionpassgrade: 1 if passing grade required for completion (optional)
-              
-              Grading:
-              * grade: Maximum grade (numeric) or scale ID (optional)
-              * gradepass: Minimum passing grade (as numeric string) (optional)
-              * gradecat: Grade category ID (optional)
-              * scale: Scale items (if scale is used), comma-separated list (optional)
-              * advancedgrading: List of advanced grading configurations (rubrics, guides) (optional)
-                Each contains: area, method
-              * outcomes: List of linked learning outcomes (optional)
-                Each contains: id, name, scale
-              
-              Format and Presentation:
-              * indent: Indentation level (optional)
-              * score: Score (system-specific purpose) (optional)
-            
-            - warnings: List of warning objects (optional):
-              * item, itemid, warningcode, message
-
-        Examples:
-            # Get information about a specific course module
-            module_info = await get_course_module(cmid=42)
-            print(f"Module: {module_info['cm']['name']}")
-            print(f"Type: {module_info['cm']['modname']}")
-            print(f"Visible: {module_info['cm'].get('visible', 0)}")
-            
-            # Check completion settings
-            cm = module_info['cm']
-            if cm['completion'] > 0:
-                print("Completion tracking is enabled")
-                if cm.get('completionview'):
-                    print("  - Requires viewing the activity")
-                if cm.get('completionpassgrade'):
-                    print("  - Requires passing grade")
-        """
-        result = await self._call_function(
-            "core_course_get_course_module",
-            cmid=cmid
-        )
-
-        if isinstance(result, dict):
-            return result
-        return {"cm": {}, "warnings": []}

@@ -50,6 +50,9 @@ mcp = FastMCP(
     lifespan=app_lifespan
 )
 
+# ============================================================================
+# Enrol Tools
+# ============================================================================
 
 @mcp.tool()
 async def get_courses(
@@ -352,6 +355,80 @@ async def get_recent_courses(
 
 
 @mcp.tool()
+async def get_course_module(
+        ctx: Context[ServerSession, MoodleClient],
+        cmid: int
+) -> dict[str, Any]:
+    """Get detailed information about a specific course module.
+
+    Returns comprehensive information about a course module
+    (activity or resource), including identification, visibility,
+    completion settings, grading configuration, and more.
+
+    Args:
+        cmid: Course module ID (required).
+
+    Returns:
+        Dictionary containing:
+        - cm: Course module object with complete information:
+          * Identification: id, course, module, modname, instance, name, section, etc.
+          * Visibility: visible, visibleoncoursepage, availability, etc.
+          * Groups: groupmode, groupingid
+          * Completion: completion, completionview, completionpassgrade, etc.
+          * Grading: grade, gradepass, gradecat, scale, advancedgrading, outcomes
+          * Format: indent, score
+        - warnings: List of warning objects (optional)
+
+    Examples:
+        # Get full information about a course module
+        info = get_course_module(cmid=42)
+
+        # Check if module is visible
+        if info['cm'].get('visible', 0) == 1:
+            print("Module is visible to students")
+
+        # Check completion requirements
+        cm = info['cm']
+        if cm['completion'] > 0:
+            print("Has completion tracking")
+            if cm.get('completionview'):
+                print("Requires viewing")
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Fetching course module with cmid={cmid}...")
+
+    try:
+        result = await client.get_course_module(cmid)
+
+        # Log key information about the module
+        if 'cm' in result and result['cm']:
+            cm = result['cm']
+            await ctx.info(
+                f"Retrieved module: '{cm.get('name', 'Unknown')}' "
+                f"(type: {cm.get('modname', 'unknown')}, "
+                f"course: {cm.get('course', 'unknown')})"
+            )
+
+            # Log completion status if available
+            if cm.get('completion', 0) > 0:
+                await ctx.info("Module has completion tracking enabled")
+
+        # Log warnings if any
+        if result.get('warnings'):
+            await ctx.info(f"Received {len(result['warnings'])} warning(s)")
+
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error fetching course module: {str(e)}")
+        raise
+
+# ============================================================================
+# Enrol Tools
+# ============================================================================
+
+@mcp.tool()
 async def get_course_enrolment_methods(
     ctx: Context[ServerSession, MoodleClient],
     courseid: int
@@ -505,6 +582,97 @@ async def manual_enrol_users(
         await ctx.error(f"Error enrolling users: {str(e)}")
         raise
 
+
+@mcp.tool()
+async def manual_unenrol_users(
+        ctx: Context[ServerSession, MoodleClient],
+        enrolments: list[ManualUnenrolment]
+) -> dict[str, Any]:
+    """Manually unenrol users from courses.
+
+    Removes user enrolments from courses. This can either remove specific roles
+    or completely unenrol the user by removing all their roles from the course.
+    This operation is permanent and cannot be undone through this function.
+
+    Args:
+        enrolments: List of ManualUnenrolment objects. Each unenrolment must have:
+                   Required fields:
+                   - userid: User ID to unenrol
+                   - courseid: Course ID from which to unenrol the user
+
+                   Optional field:
+                   - roleid: Specific role ID to remove. If not specified,
+                            ALL roles will be removed, completely unenrolling
+                            the user from the course.
+
+    Returns:
+        Dictionary result. An empty dictionary ({}) indicates success.
+        On error, an exception is raised (e.g., invalid_parameter_exception).
+
+    Examples:
+        # Completely unenrol user 5 from course 10 (remove all roles)
+        enrolments = [ManualUnenrolment(userid=5, courseid=10)]
+        result = manual_unenrol_users(enrolments=enrolments)
+
+        # Remove only the student role (role 5) for user 5 in course 10
+        # User will remain enrolled with other roles if they have any
+        enrolments = [ManualUnenrolment(userid=5, courseid=10, roleid=5)]
+        result = manual_unenrol_users(enrolments=enrolments)
+
+        # Unenrol multiple users from the same course
+        enrolments = [
+            ManualUnenrolment(userid=5, courseid=10),
+            ManualUnenrolment(userid=6, courseid=10),
+            ManualUnenrolment(userid=7, courseid=10)
+        ]
+        result = manual_unenrol_users(enrolments=enrolments)
+
+        # Mix of complete and partial unenrolments
+        enrolments = [
+            ManualUnenrolment(userid=5, courseid=10),  # Complete unenrolment
+            ManualUnenrolment(userid=6, courseid=10, roleid=5)  # Remove only role 5
+        ]
+        result = manual_unenrol_users(enrolments=enrolments)
+
+    Important Notes:
+        - If roleid is not specified, the user will be COMPLETELY unenrolled
+          from the course (all roles removed)
+        - If roleid is specified, only that specific role will be removed.
+          The user will remain enrolled if they have other roles in the course
+        - This operation requires appropriate permissions (typically teacher
+          or manager role in the course)
+        - Attempting to unenrol a user who is not enrolled will raise an error
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Processing {len(enrolments)} unenrolment operation(s)...")
+
+    try:
+        result = await client.manual_unenrol_users(enrolments)
+
+        # Count operations by type (check if roleid is None)
+        complete_unenrolments = sum(1 for e in enrolments if e.roleid is None)
+        partial_unenrolments = len(enrolments) - complete_unenrolments
+
+        if complete_unenrolments > 0:
+            await ctx.info(f"Complete unenrolments (all roles removed): {complete_unenrolments}")
+        if partial_unenrolments > 0:
+            await ctx.info(f"Partial unenrolments (specific role removed): {partial_unenrolments}")
+
+        # Empty result means success
+        if not result or result == {}:
+            await ctx.info("Successfully processed all unenrolment operations")
+
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error unenrolling users: {str(e)}")
+        raise
+
+
+# ============================================================================
+# User Tools
+# ============================================================================
 
 @mcp.tool()
 async def create_users(
@@ -759,6 +927,10 @@ async def get_users_courses(
         raise
 
 
+# ============================================================================
+# Completion Tools
+# ============================================================================
+
 @mcp.tool()
 async def get_course_completion_status(
     ctx: Context[ServerSession, MoodleClient],
@@ -930,6 +1102,88 @@ async def get_activities_completion_status(
         await ctx.error(f"Error fetching activities completion status: {str(e)}")
         raise
 
+
+@mcp.tool()
+async def update_activity_completion_status_manually(
+        ctx: Context[ServerSession, MoodleClient],
+        cmid: int,
+        completed: int
+) -> dict[str, Any]:
+    """Update activity completion status manually for the current user.
+
+    Manually marks an activity as complete or incomplete for the current user.
+    This only works for activities that have manual completion tracking enabled.
+    If the activity uses automatic completion tracking, this operation will fail
+    with a warning.
+
+    Args:
+        cmid: Course module ID (activity ID) (required).
+              This is the unique identifier for the activity within the course.
+        completed: Completion status to set (required):
+                  - 1: Mark the activity as complete
+                  - 0: Mark the activity as incomplete
+
+    Returns:
+        Dictionary containing:
+        - status: Operation result:
+          * 1: Operation was successful
+          * 0: Operation failed
+        - warnings: List of warning objects (optional):
+          * item: Item type identifier (e.g., 'cmid')
+          * itemid: Specific item ID that caused the warning
+          * warningcode: Code identifying the type of warning
+          * message: Human-readable description of the warning
+
+          Common warnings include:
+          - Activity does not have manual completion tracking enabled
+          - User does not have permission to update completion status
+          - Activity or course module does not exist
+          - User is not enrolled in the course containing the activity
+
+    Examples:
+        # Mark activity with cmid 42 as complete
+        result = update_activity_completion_status_manually(cmid=42, completed=1)
+        if result['status'] == 1:
+            print("Activity marked as complete!")
+
+        # Undo completion for activity with cmid 42
+        result = update_activity_completion_status_manually(cmid=42, completed=0)
+
+        # Check for warnings
+        if result.get('warnings'):
+            for warning in result['warnings']:
+                print(f"Warning: {warning['message']}")
+    """
+    client = ctx.request_context.lifespan_context
+
+    status_text = "complete" if completed == 1 else "incomplete"
+    await ctx.info(f"Updating activity {cmid} completion status to {status_text}...")
+
+    try:
+        result = await client.update_activity_completion_status_manually(cmid, completed)
+
+        operation_status = result.get("status", 0)
+        warnings = result.get("warnings", [])
+
+        if operation_status == 1:
+            await ctx.info(f"Successfully updated activity {cmid} to {status_text}")
+        else:
+            await ctx.info(f"Failed to update activity {cmid} (status={operation_status})")
+
+        if warnings:
+            await ctx.info(f"Note: {len(warnings)} warning(s) returned")
+            for warning in warnings:
+                await ctx.info(f"  - {warning.get('message', 'Unknown warning')}")
+
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error updating activity completion status: {str(e)}")
+        raise
+
+# ============================================================================
+# Grades Tools
+# ============================================================================
 
 @mcp.tool()
 async def update_grades(
@@ -1278,85 +1532,9 @@ async def get_feedback(
         await ctx.error(f"Error fetching feedback: {str(e)}")
         raise
 
-
-@mcp.tool()
-async def update_activity_completion_status_manually(
-    ctx: Context[ServerSession, MoodleClient],
-    cmid: int,
-    completed: int
-) -> dict[str, Any]:
-    """Update activity completion status manually for the current user.
-
-    Manually marks an activity as complete or incomplete for the current user.
-    This only works for activities that have manual completion tracking enabled.
-    If the activity uses automatic completion tracking, this operation will fail
-    with a warning.
-
-    Args:
-        cmid: Course module ID (activity ID) (required).
-              This is the unique identifier for the activity within the course.
-        completed: Completion status to set (required):
-                  - 1: Mark the activity as complete
-                  - 0: Mark the activity as incomplete
-
-    Returns:
-        Dictionary containing:
-        - status: Operation result:
-          * 1: Operation was successful
-          * 0: Operation failed
-        - warnings: List of warning objects (optional):
-          * item: Item type identifier (e.g., 'cmid')
-          * itemid: Specific item ID that caused the warning
-          * warningcode: Code identifying the type of warning
-          * message: Human-readable description of the warning
-          
-          Common warnings include:
-          - Activity does not have manual completion tracking enabled
-          - User does not have permission to update completion status
-          - Activity or course module does not exist
-          - User is not enrolled in the course containing the activity
-
-    Examples:
-        # Mark activity with cmid 42 as complete
-        result = update_activity_completion_status_manually(cmid=42, completed=1)
-        if result['status'] == 1:
-            print("Activity marked as complete!")
-        
-        # Undo completion for activity with cmid 42
-        result = update_activity_completion_status_manually(cmid=42, completed=0)
-        
-        # Check for warnings
-        if result.get('warnings'):
-            for warning in result['warnings']:
-                print(f"Warning: {warning['message']}")
-    """
-    client = ctx.request_context.lifespan_context
-
-    status_text = "complete" if completed == 1 else "incomplete"
-    await ctx.info(f"Updating activity {cmid} completion status to {status_text}...")
-
-    try:
-        result = await client.update_activity_completion_status_manually(cmid, completed)
-        
-        operation_status = result.get("status", 0)
-        warnings = result.get("warnings", [])
-        
-        if operation_status == 1:
-            await ctx.info(f"Successfully updated activity {cmid} to {status_text}")
-        else:
-            await ctx.info(f"Failed to update activity {cmid} (status={operation_status})")
-        
-        if warnings:
-            await ctx.info(f"Note: {len(warnings)} warning(s) returned")
-            for warning in warnings:
-                await ctx.info(f"  - {warning.get('message', 'Unknown warning')}")
-        
-        return result
-
-    except Exception as e:
-        await ctx.error(f"Error updating activity completion status: {str(e)}")
-        raise
-
+# ============================================================================
+# Webservice Tools
+# ============================================================================
 
 @mcp.tool()
 async def get_site_info(
@@ -1479,162 +1657,8 @@ async def get_site_info(
         raise
 
 
-@mcp.tool()
-async def manual_unenrol_users(
-    ctx: Context[ServerSession, MoodleClient],
-    enrolments: list[ManualUnenrolment]
-) -> dict[str, Any]:
-    """Manually unenrol users from courses.
-
-    Removes user enrolments from courses. This can either remove specific roles
-    or completely unenrol the user by removing all their roles from the course.
-    This operation is permanent and cannot be undone through this function.
-
-    Args:
-        enrolments: List of ManualUnenrolment objects. Each unenrolment must have:
-                   Required fields:
-                   - userid: User ID to unenrol
-                   - courseid: Course ID from which to unenrol the user
-                   
-                   Optional field:
-                   - roleid: Specific role ID to remove. If not specified,
-                            ALL roles will be removed, completely unenrolling
-                            the user from the course.
-
-    Returns:
-        Dictionary result. An empty dictionary ({}) indicates success.
-        On error, an exception is raised (e.g., invalid_parameter_exception).
-
-    Examples:
-        # Completely unenrol user 5 from course 10 (remove all roles)
-        enrolments = [ManualUnenrolment(userid=5, courseid=10)]
-        result = manual_unenrol_users(enrolments=enrolments)
-        
-        # Remove only the student role (role 5) for user 5 in course 10
-        # User will remain enrolled with other roles if they have any
-        enrolments = [ManualUnenrolment(userid=5, courseid=10, roleid=5)]
-        result = manual_unenrol_users(enrolments=enrolments)
-        
-        # Unenrol multiple users from the same course
-        enrolments = [
-            ManualUnenrolment(userid=5, courseid=10),
-            ManualUnenrolment(userid=6, courseid=10),
-            ManualUnenrolment(userid=7, courseid=10)
-        ]
-        result = manual_unenrol_users(enrolments=enrolments)
-        
-        # Mix of complete and partial unenrolments
-        enrolments = [
-            ManualUnenrolment(userid=5, courseid=10),  # Complete unenrolment
-            ManualUnenrolment(userid=6, courseid=10, roleid=5)  # Remove only role 5
-        ]
-        result = manual_unenrol_users(enrolments=enrolments)
-
-    Important Notes:
-        - If roleid is not specified, the user will be COMPLETELY unenrolled
-          from the course (all roles removed)
-        - If roleid is specified, only that specific role will be removed.
-          The user will remain enrolled if they have other roles in the course
-        - This operation requires appropriate permissions (typically teacher
-          or manager role in the course)
-        - Attempting to unenrol a user who is not enrolled will raise an error
-    """
-    client = ctx.request_context.lifespan_context
-
-    await ctx.info(f"Processing {len(enrolments)} unenrolment operation(s)...")
-
-    try:
-        result = await client.manual_unenrol_users(enrolments)
-        
-        # Count operations by type (check if roleid is None)
-        complete_unenrolments = sum(1 for e in enrolments if e.roleid is None)
-        partial_unenrolments = len(enrolments) - complete_unenrolments
-        
-        if complete_unenrolments > 0:
-            await ctx.info(f"Complete unenrolments (all roles removed): {complete_unenrolments}")
-        if partial_unenrolments > 0:
-            await ctx.info(f"Partial unenrolments (specific role removed): {partial_unenrolments}")
-        
-        # Empty result means success
-        if not result or result == {}:
-            await ctx.info("Successfully processed all unenrolment operations")
-        
-        return result
-
-    except Exception as e:
-        await ctx.error(f"Error unenrolling users: {str(e)}")
-        raise
 
 
-@mcp.tool()
-async def get_course_module(
-    ctx: Context[ServerSession, MoodleClient],
-    cmid: int
-) -> dict[str, Any]:
-    """Get detailed information about a specific course module.
-
-    Returns comprehensive information about a course module
-    (activity or resource), including identification, visibility,
-    completion settings, grading configuration, and more.
-
-    Args:
-        cmid: Course module ID (required).
-
-    Returns:
-        Dictionary containing:
-        - cm: Course module object with complete information:
-          * Identification: id, course, module, modname, instance, name, section, etc.
-          * Visibility: visible, visibleoncoursepage, availability, etc.
-          * Groups: groupmode, groupingid
-          * Completion: completion, completionview, completionpassgrade, etc.
-          * Grading: grade, gradepass, gradecat, scale, advancedgrading, outcomes
-          * Format: indent, score
-        - warnings: List of warning objects (optional)
-
-    Examples:
-        # Get full information about a course module
-        info = get_course_module(cmid=42)
-        
-        # Check if module is visible
-        if info['cm'].get('visible', 0) == 1:
-            print("Module is visible to students")
-        
-        # Check completion requirements
-        cm = info['cm']
-        if cm['completion'] > 0:
-            print("Has completion tracking")
-            if cm.get('completionview'):
-                print("Requires viewing")
-    """
-    client = ctx.request_context.lifespan_context
-
-    await ctx.info(f"Fetching course module with cmid={cmid}...")
-
-    try:
-        result = await client.get_course_module(cmid)
-        
-        # Log key information about the module
-        if 'cm' in result and result['cm']:
-            cm = result['cm']
-            await ctx.info(
-                f"Retrieved module: '{cm.get('name', 'Unknown')}' "
-                f"(type: {cm.get('modname', 'unknown')}, "
-                f"course: {cm.get('course', 'unknown')})"
-            )
-            
-            # Log completion status if available
-            if cm.get('completion', 0) > 0:
-                await ctx.info("Module has completion tracking enabled")
-        
-        # Log warnings if any
-        if result.get('warnings'):
-            await ctx.info(f"Received {len(result['warnings'])} warning(s)")
-        
-        return result
-
-    except Exception as e:
-        await ctx.error(f"Error fetching course module: {str(e)}")
-        raise
 
 
 def run_server():

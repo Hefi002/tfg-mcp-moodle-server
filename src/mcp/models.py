@@ -252,153 +252,76 @@ class CourseContentsOption(BaseModel):
 
 
 # ============================================================================
-# Grades Models
+# Enrolment Models
 # ============================================================================
 
-class GradeItemDetails(BaseModel):
-    """Details for a grade item configuration.
-    
-    Used with core_grades_update_grades to modify grade item settings.
-    All fields are optional.
+class EnrolledUsersOption(BaseModel):
+    """Options for filtering enrolled users results.
+
+    All fields are optional. Only specify the filters you want to apply.
     """
-    itemname: Optional[str] = Field(
+    withcapability: Optional[str] = Field(
         default=None,
-        description="Name of the grade item"
+        description="Return only users with this capability. Requires moodle/role:review permission"
     )
-    idnumber: Optional[int] = Field(
+    groupid: Optional[int] = Field(
         default=None,
-        description="Arbitrary identification number provided by the module"
+        description="Return only users in this group. Requires moodle/site:accessallgroups if querying user not in group"
     )
-    gradetype: Optional[int] = Field(
+    onlyactive: Optional[int] = Field(
         default=None,
-        description="Grade type: 0=None, 1=Value (numeric), 2=Scale, 3=Text"
+        description="1 to return only users with active enrolments. Requires moodle/course:enrolreview. Incompatible with onlysuspended"
     )
-    grademax: Optional[float] = Field(
+    onlysuspended: Optional[int] = Field(
         default=None,
-        description="Maximum grade allowed"
+        description="1 to return only suspended users. Requires moodle/course:enrolreview. Incompatible with onlyactive"
     )
-    grademin: Optional[float] = Field(
+    userfields: Optional[str] = Field(
         default=None,
-        description="Minimum grade allowed"
+        description="Comma-separated list of user fields to return (e.g., 'id,firstname,lastname')"
     )
-    scaleid: Optional[int] = Field(
+    limitfrom: Optional[int] = Field(
         default=None,
-        description="ID of custom scale used (only if gradetype=2)"
+        description="SQL offset for pagination"
     )
-    multfactor: Optional[float] = Field(
+    limitnumber: Optional[int] = Field(
         default=None,
-        description="Multiply all grades by this number"
+        description="Maximum number of users to return"
     )
-    plusfactor: Optional[float] = Field(
+    sortby: Optional[str] = Field(
         default=None,
-        description="Add this value to all grades"
+        description="Field to sort by: id, firstname, lastname, siteorder"
     )
-    deleted: Optional[int] = Field(
+    sortdirection: Optional[str] = Field(
         default=None,
-        description="Set to 1 to mark the grade item as deleted"
-    )
-    hidden: Optional[int] = Field(
-        default=None,
-        description="Set to 1 to hide the grade item"
+        description="Sort direction: ASC or DESC"
     )
 
-    def to_moodle_dict(self) -> dict[str, Any]:
-        """Converts the model to a dictionary compatible with the Moodle API.
-        
-        Removes None fields to avoid sending unnecessary data to the API.
+    @field_validator('onlyactive', 'onlysuspended')
+    @classmethod
+    def validate_active_suspended(cls, v: Optional[int], info) -> Optional[int]:
+        """Validates that onlyactive and onlysuspended are not both set."""
+        field_name = info.field_name
+        if v is not None:
+            # Check if the other field is also set
+            other_field = 'onlysuspended' if field_name == 'onlyactive' else 'onlyactive'
+            if info.data.get(other_field) is not None:
+                raise ValueError('onlyactive and onlysuspended are incompatible')
+        return v
+
+    def to_moodle_dict(self) -> list[dict[str, Any]]:
+        """Converts the model to a list of {name, value} dicts for Moodle API.
+
+        Moodle expects options as an array of objects with 'name' and 'value' keys.
+        Only includes non-None fields.
         """
-        return self.model_dump(exclude_none=True)
+        options = []
+        data = self.model_dump(exclude_none=True)
 
+        for name, value in data.items():
+            options.append({"name": name, "value": value})
 
-class StudentGrade(BaseModel):
-    """Represents a grade for a student.
-    
-    Used with core_grades_update_grades to update student grades.
-    """
-    studentid: int = Field(
-        ...,
-        description="Student ID"
-    )
-    grade: float = Field(
-        ...,
-        description="Numeric grade. For scale items (gradetype=2), must be the scale option ID"
-    )
-    str_feedback: Optional[str] = Field(
-        default=None,
-        description="Feedback comment in plain text"
-    )
-
-    def to_moodle_dict(self) -> dict[str, Any]:
-        """Converts the model to a dictionary compatible with the Moodle API.
-        
-        Removes None fields to avoid sending unnecessary data to the API.
-        """
-        return self.model_dump(exclude_none=True)
-
-
-class ManualEnrolment(BaseModel):
-    """Represents a manual enrolment operation for a user in a course.
-    
-    Used with enrol_manual_enrol_users to manually enrol users.
-    """
-    roleid: int = Field(
-        ...,
-        description="Role ID to assign to the user in the course"
-    )
-    userid: int = Field(
-        ...,
-        description="User ID to enrol"
-    )
-    courseid: int = Field(
-        ...,
-        description="Course ID in which to enrol the user"
-    )
-    timestart: Optional[int] = Field(
-        default=None,
-        description="Enrolment start timestamp. 0 means immediate or use default configuration"
-    )
-    timeend: Optional[int] = Field(
-        default=None,
-        description="Enrolment end timestamp. 0 means no time restriction"
-    )
-    suspend: Optional[int] = Field(
-        default=None,
-        description="Set to 1 to create enrolment in suspended (inactive) state. 0 for active enrolment"
-    )
-
-    def to_moodle_dict(self) -> dict[str, Any]:
-        """Converts the model to a dictionary compatible with the Moodle API.
-        
-        Removes None fields to avoid sending unnecessary data to the API.
-        """
-        return self.model_dump(exclude_none=True)
-
-
-class ManualUnenrolment(BaseModel):
-    """Represents a manual unenrolment operation for a user from a course.
-    
-    Used with enrol_manual_unenrol_users to manually unenrol users.
-    """
-    userid: int = Field(
-        ...,
-        description="User ID to unenrol"
-    )
-    courseid: int = Field(
-        ...,
-        description="Course ID from which to unenrol the user"
-    )
-    roleid: Optional[int] = Field(
-        default=None,
-        description="Specific role ID to remove. If not specified, all roles will be removed (complete unenrolment)"
-    )
-
-    def to_moodle_dict(self) -> dict[str, Any]:
-        """Converts the model to a dictionary compatible with the Moodle API.
-        
-        Removes None fields to avoid sending unnecessary data to the API.
-        """
-        return self.model_dump(exclude_none=True)
-
+        return options
 
 # ============================================================================
 # User Models
@@ -627,73 +550,150 @@ class UserSearchCriteria(BaseModel):
 
 
 # ============================================================================
-# Enrolment Models
+# Grades Models
 # ============================================================================
 
-class EnrolledUsersOption(BaseModel):
-    """Options for filtering enrolled users results.
-    
-    All fields are optional. Only specify the filters you want to apply.
+class GradeItemDetails(BaseModel):
+    """Details for a grade item configuration.
+
+    Used with core_grades_update_grades to modify grade item settings.
+    All fields are optional.
     """
-    withcapability: Optional[str] = Field(
+    itemname: Optional[str] = Field(
         default=None,
-        description="Return only users with this capability. Requires moodle/role:review permission"
+        description="Name of the grade item"
     )
-    groupid: Optional[int] = Field(
+    idnumber: Optional[int] = Field(
         default=None,
-        description="Return only users in this group. Requires moodle/site:accessallgroups if querying user not in group"
+        description="Arbitrary identification number provided by the module"
     )
-    onlyactive: Optional[int] = Field(
+    gradetype: Optional[int] = Field(
         default=None,
-        description="1 to return only users with active enrolments. Requires moodle/course:enrolreview. Incompatible with onlysuspended"
+        description="Grade type: 0=None, 1=Value (numeric), 2=Scale, 3=Text"
     )
-    onlysuspended: Optional[int] = Field(
+    grademax: Optional[float] = Field(
         default=None,
-        description="1 to return only suspended users. Requires moodle/course:enrolreview. Incompatible with onlyactive"
+        description="Maximum grade allowed"
     )
-    userfields: Optional[str] = Field(
+    grademin: Optional[float] = Field(
         default=None,
-        description="Comma-separated list of user fields to return (e.g., 'id,firstname,lastname')"
+        description="Minimum grade allowed"
     )
-    limitfrom: Optional[int] = Field(
+    scaleid: Optional[int] = Field(
         default=None,
-        description="SQL offset for pagination"
+        description="ID of custom scale used (only if gradetype=2)"
     )
-    limitnumber: Optional[int] = Field(
+    multfactor: Optional[float] = Field(
         default=None,
-        description="Maximum number of users to return"
+        description="Multiply all grades by this number"
     )
-    sortby: Optional[str] = Field(
+    plusfactor: Optional[float] = Field(
         default=None,
-        description="Field to sort by: id, firstname, lastname, siteorder"
+        description="Add this value to all grades"
     )
-    sortdirection: Optional[str] = Field(
+    deleted: Optional[int] = Field(
         default=None,
-        description="Sort direction: ASC or DESC"
+        description="Set to 1 to mark the grade item as deleted"
+    )
+    hidden: Optional[int] = Field(
+        default=None,
+        description="Set to 1 to hide the grade item"
     )
 
-    @field_validator('onlyactive', 'onlysuspended')
-    @classmethod
-    def validate_active_suspended(cls, v: Optional[int], info) -> Optional[int]:
-        """Validates that onlyactive and onlysuspended are not both set."""
-        field_name = info.field_name
-        if v is not None:
-            # Check if the other field is also set
-            other_field = 'onlysuspended' if field_name == 'onlyactive' else 'onlyactive'
-            if info.data.get(other_field) is not None:
-                raise ValueError('onlyactive and onlysuspended are incompatible')
-        return v
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
 
-    def to_moodle_dict(self) -> list[dict[str, Any]]:
-        """Converts the model to a list of {name, value} dicts for Moodle API.
-        
-        Moodle expects options as an array of objects with 'name' and 'value' keys.
-        Only includes non-None fields.
+        Removes None fields to avoid sending unnecessary data to the API.
         """
-        options = []
-        data = self.model_dump(exclude_none=True)
-        
-        for name, value in data.items():
-            options.append({"name": name, "value": value})
-        
-        return options
+        return self.model_dump(exclude_none=True)
+
+
+class StudentGrade(BaseModel):
+    """Represents a grade for a student.
+
+    Used with core_grades_update_grades to update student grades.
+    """
+    studentid: int = Field(
+        ...,
+        description="Student ID"
+    )
+    grade: float = Field(
+        ...,
+        description="Numeric grade. For scale items (gradetype=2), must be the scale option ID"
+    )
+    str_feedback: Optional[str] = Field(
+        default=None,
+        description="Feedback comment in plain text"
+    )
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
+
+        Removes None fields to avoid sending unnecessary data to the API.
+        """
+        return self.model_dump(exclude_none=True)
+
+
+class ManualEnrolment(BaseModel):
+    """Represents a manual enrolment operation for a user in a course.
+
+    Used with enrol_manual_enrol_users to manually enrol users.
+    """
+    roleid: int = Field(
+        ...,
+        description="Role ID to assign to the user in the course"
+    )
+    userid: int = Field(
+        ...,
+        description="User ID to enrol"
+    )
+    courseid: int = Field(
+        ...,
+        description="Course ID in which to enrol the user"
+    )
+    timestart: Optional[int] = Field(
+        default=None,
+        description="Enrolment start timestamp. 0 means immediate or use default configuration"
+    )
+    timeend: Optional[int] = Field(
+        default=None,
+        description="Enrolment end timestamp. 0 means no time restriction"
+    )
+    suspend: Optional[int] = Field(
+        default=None,
+        description="Set to 1 to create enrolment in suspended (inactive) state. 0 for active enrolment"
+    )
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
+
+        Removes None fields to avoid sending unnecessary data to the API.
+        """
+        return self.model_dump(exclude_none=True)
+
+
+class ManualUnenrolment(BaseModel):
+    """Represents a manual unenrolment operation for a user from a course.
+
+    Used with enrol_manual_unenrol_users to manually unenrol users.
+    """
+    userid: int = Field(
+        ...,
+        description="User ID to unenrol"
+    )
+    courseid: int = Field(
+        ...,
+        description="Course ID from which to unenrol the user"
+    )
+    roleid: Optional[int] = Field(
+        default=None,
+        description="Specific role ID to remove. If not specified, all roles will be removed (complete unenrolment)"
+    )
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
+
+        Removes None fields to avoid sending unnecessary data to the API.
+        """
+        return self.model_dump(exclude_none=True)
+
