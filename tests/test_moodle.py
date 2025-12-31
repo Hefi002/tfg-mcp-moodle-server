@@ -123,11 +123,12 @@ async def test_call_function_with_parameters(moodle_client):
 async def test_call_function_unexpected_type(moodle_client):
     """Test _call_function handles completely unexpected response types.
     
-    If Moodle API returns something unexpected (string, null, number),
-    _call_function should raise ValueError.
+    The API now accepts dict, list, str, int, and None as valid response types.
+    This test verifies that truly unexpected types (e.g., float, bool)
+    still raise ValueError.
     """
     mock_response = MagicMock()
-    mock_response.json.return_value = "unexpected string"
+    mock_response.json.return_value = 3.14  # float is not a valid type
     mock_response.raise_for_status = MagicMock()
     
     with patch.object(moodle_client.client, 'post', new_callable=AsyncMock) as mock_post:
@@ -542,6 +543,260 @@ async def test_manual_enrol_users(moodle_client):
 
 
 @pytest.mark.asyncio
+async def test_update_grades(moodle_client):
+    """Base case test for update_grades.
+
+    Ensures:
+    - correct webservice function is invoked,
+    - all required parameters are forwarded correctly,
+    - grades and itemdetails are converted to dictionaries,
+    - returns integer result code (0 for success).
+    """
+    from src.mcp.models import StudentGrade, GradeItemDetails
+    
+    expected_func = "core_grades_update_grades"
+    source = "test_script"
+    courseid = 10
+    component = "mod_assign"
+    activityid = 42
+    itemnumber = 0
+    
+    # Create test data
+    grades = [
+        StudentGrade(studentid=5, grade=85.5, str_feedback="Good work!"),
+        StudentGrade(studentid=6, grade=92.0)
+    ]
+    itemdetails = GradeItemDetails(
+        itemname="Final Project",
+        grademax=100.0,
+        grademin=0.0
+    )
+    
+    # Expected conversion to dicts
+    expected_grades = [g.to_moodle_dict() for g in grades]
+    expected_itemdetails = itemdetails.to_moodle_dict()
+    
+    # API returns 0 for success (GRADE_UPDATE_OK)
+    expected_result = 0
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = expected_result
+
+        result = await moodle_client.update_grades(
+            source=source,
+            courseid=courseid,
+            component=component,
+            activityid=activityid,
+            itemnumber=itemnumber,
+            grades=grades,
+            itemdetails=itemdetails
+        )
+
+        # Verify correct function and parameters
+        mock_call.assert_called_once_with(
+            expected_func,
+            source=source,
+            courseid=courseid,
+            component=component,
+            activityid=activityid,
+            itemnumber=itemnumber,
+            grades=expected_grades,
+            itemdetails=expected_itemdetails
+        )
+
+        # Verify result is the integer code
+        assert isinstance(result, int)
+        assert result == 0  # GRADE_UPDATE_OK
+
+
+@pytest.mark.asyncio
+async def test_get_gradeitems(moodle_client):
+    """Base case test for get_gradeitems.
+
+    Ensures:
+    - correct webservice function is invoked,
+    - courseid parameter is forwarded correctly,
+    - returned value is propagated unchanged.
+    """
+    expected_func = "core_grades_get_gradeitems"
+    courseid = 10
+    expected_result = {
+        "gradeItems": [
+            {
+                "id": "mod_quiz_42_0",
+                "itemname": "Quiz 1: Introduction",
+                "category": "Quizzes"
+            },
+            {
+                "id": "mod_assign_15_0",
+                "itemname": "Assignment 1: Essay",
+                "category": "Assignments"
+            },
+            {
+                "id": "manual_10",
+                "itemname": "Participation"
+            }
+        ],
+        "warnings": []
+    }
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = expected_result
+
+        result = await moodle_client.get_gradeitems(courseid)
+
+        # Verify correct function and parameters
+        mock_call.assert_called_once_with(
+            expected_func,
+            courseid=courseid
+        )
+
+        # Verify result propagated
+        assert isinstance(result, dict)
+        assert result == expected_result
+        assert "gradeItems" in result
+        assert len(result["gradeItems"]) == 3
+        assert result["gradeItems"][0]["id"] == "mod_quiz_42_0"
+        assert result["gradeItems"][0]["itemname"] == "Quiz 1: Introduction"
+        assert result["gradeItems"][0]["category"] == "Quizzes"
+
+
+@pytest.mark.asyncio
+async def test_get_grade_tree(moodle_client):
+    """Base case test for get_grade_tree.
+
+    Ensures:
+    - correct webservice function is invoked,
+    - courseid parameter is forwarded correctly,
+    - JSON string from API is parsed and returned as dict,
+    - dict returned directly from API is also handled.
+    """
+    import json
+    
+    expected_func = "core_grades_get_grade_tree"
+    courseid = 10
+    
+    # Sample grade tree structure
+    tree_structure = {
+        "id": "course_10",
+        "type": "course",
+        "name": "Test Course",
+        "children": [
+            {
+                "id": "category_1",
+                "type": "category",
+                "name": "Assignments",
+                "aggregation": "weighted_mean",
+                "children": [
+                    {
+                        "id": "item_101",
+                        "type": "item",
+                        "itemname": "Assignment 1",
+                        "grademax": 100.0,
+                        "grademin": 0.0
+                    },
+                    {
+                        "id": "item_102",
+                        "type": "item",
+                        "itemname": "Assignment 2",
+                        "grademax": 100.0,
+                        "grademin": 0.0
+                    }
+                ]
+            },
+            {
+                "id": "category_2",
+                "type": "category",
+                "name": "Quizzes",
+                "aggregation": "simple_weighted_mean",
+                "children": [
+                    {
+                        "id": "item_201",
+                        "type": "item",
+                        "itemname": "Quiz 1",
+                        "grademax": 50.0,
+                        "grademin": 0.0
+                    }
+                ]
+            }
+        ]
+    }
+    
+    # Test case 1: Moodle returns JSON string (needs parsing)
+    api_response_string = json.dumps(tree_structure)
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = api_response_string
+
+        result = await moodle_client.get_grade_tree(courseid)
+
+        # Verify correct function and parameters
+        mock_call.assert_called_once_with(
+            expected_func,
+            courseid=courseid
+        )
+
+        # Verify result is parsed dict (not a string)
+        assert isinstance(result, dict)
+        assert result == tree_structure
+        assert result["type"] == "course"
+        assert len(result["children"]) == 2
+        assert result["children"][0]["name"] == "Assignments"
+        assert len(result["children"][0]["children"]) == 2
+    
+    # Test case 2: Moodle returns dict directly (no parsing needed)
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = tree_structure
+
+        result = await moodle_client.get_grade_tree(courseid)
+
+        # Verify result is the same dict
+        assert isinstance(result, dict)
+        assert result == tree_structure
+
+
+@pytest.mark.asyncio
+async def test_get_feedback(moodle_client):
+    """Base case test for get_feedback.
+
+    Ensures:
+    - correct webservice function is invoked,
+    - all required parameters are forwarded correctly,
+    - returned value is propagated unchanged.
+    """
+    expected_func = "core_grades_get_feedback"
+    courseid = 10
+    userid = 5
+    itemid = 42
+    expected_result = {
+        "feedbacktext": "Great work on this assignment! Keep it up.",
+        "title": "Assignment 1: Essay",
+        "fullname": "John Doe",
+        "picture": "https://moodle.example.com/user/pix.php/5/f1.jpg",
+        "additionalfield": "jdoe@example.com"
+    }
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = expected_result
+
+        result = await moodle_client.get_feedback(courseid, userid, itemid)
+
+        # Verify correct function and parameters
+        mock_call.assert_called_once_with(
+            expected_func,
+            courseid=courseid,
+            userid=userid,
+            itemid=itemid
+        )
+
+        # Verify result propagated
+        assert isinstance(result, dict)
+        assert result == expected_result
+        assert result["feedbacktext"] == "Great work on this assignment! Keep it up."
+        assert result["fullname"] == "John Doe"
+
+
+@pytest.mark.asyncio
 async def test_create_users(moodle_client):
     """Test create_users base case.
 
@@ -830,4 +1085,56 @@ async def test_manual_unenrol_users(moodle_client):
         # Verify the result is an empty dict on success
         assert isinstance(result, dict)
         assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_get_grade_items_user_report(moodle_client):
+    """Base case test for get_grade_items_user_report.
+
+    Ensures:
+    - correct webservice function is invoked,
+    - courseid parameter is passed correctly,
+    - optional parameters (userid, groupid) are handled when not specified,
+    - returned value is propagated unchanged.
+    """
+    expected_func = "gradereport_user_get_grade_items"
+    courseid = 10
+    expected_result = {
+        "usergrades": [
+            {
+                "courseid": 10,
+                "userid": 5,
+                "userfullname": "John Doe",
+                "gradeitems": [
+                    {
+                        "id": 100,
+                        "itemname": "Test Assignment",
+                        "itemtype": "mod",
+                        "graderaw": 85.5,
+                        "gradeformatted": "85.50"
+                    }
+                ]
+            }
+        ],
+        "warnings": []
+    }
+
+    with patch.object(moodle_client, '_call_function', new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = expected_result
+
+        # Test with only courseid (base case)
+        result = await moodle_client.get_grade_items_user_report(courseid=courseid)
+
+        # Verify correct function called with only courseid
+        mock_call.assert_called_once_with(
+            expected_func,
+            courseid=courseid
+        )
+
+        # Verify result propagated
+        assert isinstance(result, dict)
+        assert result == expected_result
+        assert "usergrades" in result
+        assert len(result["usergrades"]) == 1
+        assert result["usergrades"][0]["userfullname"] == "John Doe"
 

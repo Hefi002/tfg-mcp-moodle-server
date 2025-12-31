@@ -251,6 +251,91 @@ class CourseContentsOption(BaseModel):
         return options
 
 
+# ============================================================================
+# Grades Models
+# ============================================================================
+
+class GradeItemDetails(BaseModel):
+    """Details for a grade item configuration.
+    
+    Used with core_grades_update_grades to modify grade item settings.
+    All fields are optional.
+    """
+    itemname: Optional[str] = Field(
+        default=None,
+        description="Name of the grade item"
+    )
+    idnumber: Optional[int] = Field(
+        default=None,
+        description="Arbitrary identification number provided by the module"
+    )
+    gradetype: Optional[int] = Field(
+        default=None,
+        description="Grade type: 0=None, 1=Value (numeric), 2=Scale, 3=Text"
+    )
+    grademax: Optional[float] = Field(
+        default=None,
+        description="Maximum grade allowed"
+    )
+    grademin: Optional[float] = Field(
+        default=None,
+        description="Minimum grade allowed"
+    )
+    scaleid: Optional[int] = Field(
+        default=None,
+        description="ID of custom scale used (only if gradetype=2)"
+    )
+    multfactor: Optional[float] = Field(
+        default=None,
+        description="Multiply all grades by this number"
+    )
+    plusfactor: Optional[float] = Field(
+        default=None,
+        description="Add this value to all grades"
+    )
+    deleted: Optional[int] = Field(
+        default=None,
+        description="Set to 1 to mark the grade item as deleted"
+    )
+    hidden: Optional[int] = Field(
+        default=None,
+        description="Set to 1 to hide the grade item"
+    )
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
+        
+        Removes None fields to avoid sending unnecessary data to the API.
+        """
+        return self.model_dump(exclude_none=True)
+
+
+class StudentGrade(BaseModel):
+    """Represents a grade for a student.
+    
+    Used with core_grades_update_grades to update student grades.
+    """
+    studentid: int = Field(
+        ...,
+        description="Student ID"
+    )
+    grade: float = Field(
+        ...,
+        description="Numeric grade. For scale items (gradetype=2), must be the scale option ID"
+    )
+    str_feedback: Optional[str] = Field(
+        default=None,
+        description="Feedback comment in plain text"
+    )
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
+        
+        Removes None fields to avoid sending unnecessary data to the API.
+        """
+        return self.model_dump(exclude_none=True)
+
+
 class ManualEnrolment(BaseModel):
     """Represents a manual enrolment operation for a user in a course.
     

@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.session import ServerSession
 from .protocol import MoodleClient
-from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, ManualUnenrolment, UserCreate, UserSearchCriteria
+from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, ManualUnenrolment, UserCreate, UserSearchCriteria, GradeItemDetails, StudentGrade
 from .utils.logger import get_logger
 
 # Load environment variables
@@ -928,6 +928,354 @@ async def get_activities_completion_status(
 
     except Exception as e:
         await ctx.error(f"Error fetching activities completion status: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def update_grades(
+    ctx: Context[ServerSession, MoodleClient],
+    source: str,
+    courseid: int,
+    component: str,
+    activityid: int,
+    itemnumber: int,
+    grades: list[StudentGrade] | None = None,
+    itemdetails: GradeItemDetails | None = None
+) -> int:
+    """Update a grade item and associated student grades.
+
+    Updates a grade item configuration and/or student grades for a specific
+    activity in Moodle. Can update the grade item settings, student grades,
+    or both simultaneously.
+
+    Args:
+        source: Source of the update (arbitrary identifier, e.g., 'my_script').
+        courseid: Course ID (required).
+        component: Component the activity belongs to (e.g., 'mod_quiz', 'mod_assign').
+        activityid: ID of the activity instance (e.g., specific quiz ID).
+        itemnumber: Grade item number for modules with multiple grades. Typically 0.
+        grades: List of StudentGrade objects with grades to update (optional).
+               Each StudentGrade must have:
+               - studentid: Student ID
+               - grade: Numeric grade (for scale items, must be scale option ID)
+               - str_feedback: Feedback comment in plain text (optional)
+        itemdetails: GradeItemDetails object with grade item config to modify (optional).
+                    Available settings:
+                    - itemname: Name of the grade item
+                    - idnumber: Arbitrary identification number
+                    - gradetype: Grade type (0=None, 1=Value, 2=Scale, 3=Text)
+                    - grademax: Maximum grade allowed
+                    - grademin: Minimum grade allowed
+                    - scaleid: ID of custom scale (only if gradetype=2)
+                    - multfactor: Multiply all grades by this number
+                    - plusfactor: Add this value to all grades
+                    - deleted: Set to 1 to mark item as deleted
+                    - hidden: Set to 1 to hide the item
+
+    Returns:
+        Result code:
+        - 0: GRADE_UPDATE_OK (Success)
+        - 1: GRADE_UPDATE_FAILED (Failure)
+
+    Example:
+        grades = [StudentGrade(studentid=5, grade=85.5, str_feedback="Good work!")]
+        itemdetails = GradeItemDetails(itemname="Final Project", grademax=100.0, grademin=0.0)
+        result = update_grades(
+            source="manual_grading", courseid=10, component="mod_assign",
+            activityid=42, itemnumber=0, grades=grades, itemdetails=itemdetails
+        )
+    """
+    client = ctx.request_context.lifespan_context
+
+    # Build description of what's being updated
+    updates = []
+    if grades:
+        updates.append(f"{len(grades)} student grade(s)")
+    if itemdetails:
+        updates.append("grade item configuration")
+    
+    if not updates:
+        updates.append("grade item (no changes specified)")
+    
+    updates_desc = " and ".join(updates)
+    
+    await ctx.info(
+        f"Updating {updates_desc} for activity {activityid} "
+        f"(component: {component}, course: {courseid})..."
+    )
+
+    try:
+        result = await client.update_grades(
+            source=source,
+            courseid=courseid,
+            component=component,
+            activityid=activityid,
+            itemnumber=itemnumber,
+            grades=grades,
+            itemdetails=itemdetails
+        )
+
+        if result == 0:
+            await ctx.info(f"Successfully updated {updates_desc} (GRADE_UPDATE_OK)")
+        else:
+            await ctx.info(f"Failed to update {updates_desc} (GRADE_UPDATE_FAILED)")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error updating grades: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def get_gradeitems(
+    ctx: Context[ServerSession, MoodleClient],
+    courseid: int
+) -> dict[str, Any]:
+    """Get grade items for a course.
+
+    Returns all grade items (grade elements) configured in a specific course.
+    Grade items represent individual assessments, activities, or manual grade entries.
+
+    Args:
+        courseid: Course ID (required).
+
+    Returns:
+        Dictionary containing:
+        - gradeItems: List of grade item objects:
+          * id: Unique identifier string (not numeric DB ID, e.g., "mod_quiz_1234_0")
+          * itemname: Full name of the grade item
+          * category: Name of the grade category the item belongs to (optional)
+        - warnings: List of warning objects (optional):
+          * item, itemid, warningcode, message
+
+    Example:
+        items = get_gradeitems(courseid=10)
+        for item in items['gradeItems']:
+            print(f"{item['itemname']} ({item['id']}) - {item.get('category', 'No category')}")
+        assignments = [i for i in items['gradeItems'] if i.get('category') == 'Assignments']
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Fetching grade items for course {courseid} from Moodle...")
+
+    try:
+        result = await client.get_gradeitems(courseid)
+        
+        items = result.get("gradeItems", [])
+        warnings_count = len(result.get("warnings", []))
+        
+        await ctx.info(f"Successfully retrieved {len(items)} grade item(s) for course {courseid}")
+        
+        if warnings_count > 0:
+            await ctx.info(f"Note: {warnings_count} warning(s) returned")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error fetching grade items: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def get_grade_items_user_report(
+    ctx: Context[ServerSession, MoodleClient],
+    courseid: int,
+    userid: int = 0,
+    groupid: int = 0
+) -> dict[str, Any]:
+    """Get complete list of grade items and user grades in a course.
+
+    Returns the full grade report as shown in the "User report" view in Moodle.
+    This provides a comprehensive view of all grade items and user grades,
+    including detailed information about each grade item and the user's performance.
+
+    Args:
+        courseid: Course ID (required).
+        userid: User ID (optional). If specified (>0), returns grades only for this user.
+               If 0 (default), returns grades for all visible users.
+        groupid: Group ID (optional). If specified (>0), gets users only from this group.
+                If 0 (default), includes all groups.
+
+    Returns:
+        Dictionary containing:
+        - usergrades: List of user objects with their grades:
+          * courseid: Course ID
+          * courseidnumber: Course ID number
+          * userid: User ID
+          * userfullname: User full name
+          * useridnumber: User ID number
+          * maxdepth: Maximum depth of grade category hierarchy
+          * gradeitems: List of grade item objects with user's grades:
+            - Identification: id, itemname, itemtype, itemmodule, iteminstance, itemnumber,
+              idnumber, categoryid, cmid (optional)
+            - Configuration: scaleid, outcomeid, weightraw, weightformatted, grademin,
+              grademax, locked (all optional)
+            - User's Grade: graderaw, gradeformatted, percentageformatted,
+              lettergradeformatted, rangeformatted, rank (all optional)
+            - Grade Metadata: status, gradedatesubmitted, gradedategraded, gradehiddenbydate,
+              gradeishidden, gradeislocked, gradeisoverridden, gradeneedsupdate (all optional)
+            - Feedback: feedback, feedbackformat (optional)
+            - Statistics: numusers, averageformatted (optional)
+        - warnings: List of warning objects (optional)
+
+    Example:
+        report = get_grade_items_user_report(courseid=10, userid=5)
+        for user in report['usergrades']:
+            print(f"User: {user['userfullname']}")
+            for item in user['gradeitems']:
+                grade = item.get('gradeformatted', 'No grade')
+                print(f"  {item['itemname']}: {grade}")
+    """
+    client = ctx.request_context.lifespan_context
+
+    if userid > 0 and groupid > 0:
+        await ctx.info(
+            f"Fetching grade report for user {userid} in group {groupid} "
+            f"from course {courseid}..."
+        )
+    elif userid > 0:
+        await ctx.info(f"Fetching grade report for user {userid} in course {courseid}...")
+    elif groupid > 0:
+        await ctx.info(f"Fetching grade report for group {groupid} in course {courseid}...")
+    else:
+        await ctx.info(f"Fetching grade report for all users in course {courseid}...")
+
+    try:
+        result = await client.get_grade_items_user_report(courseid, userid, groupid)
+        
+        usergrades = result.get("usergrades", [])
+        warnings_count = len(result.get("warnings", []))
+        
+        # Count grade items and users
+        total_users = len(usergrades)
+        total_items = len(usergrades[0].get("gradeitems", [])) if usergrades else 0
+        
+        await ctx.info(
+            f"Successfully retrieved grade report: {total_users} user(s), "
+            f"{total_items} grade item(s)"
+        )
+        
+        if warnings_count > 0:
+            await ctx.info(f"Note: {warnings_count} warning(s) returned")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error fetching grade report: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def get_grade_tree(
+    ctx: Context[ServerSession, MoodleClient],
+    courseid: int
+) -> dict[str, Any]:
+    """Get hierarchical grade structure (tree) for a course.
+
+    Returns the complete gradebook structure for a course as a dictionary.
+    This includes the full hierarchy of grade categories, subcategories,
+    grade items, their relationships, weights, and aggregation settings.
+
+    Args:
+        courseid: Course ID (required).
+
+    Returns:
+        Dictionary containing the complete gradebook structure:
+        - children: List of grade categories and items
+        - Grade categories and their hierarchy
+        - Grade items within each category
+        - Aggregation methods and weights
+        - Grade scales and maximum/minimum values
+        - Hidden/visible status of items
+        - And other gradebook configuration details
+
+    Example:
+        tree = get_grade_tree(courseid=10)
+        for item in tree.get('children', []):
+            if item.get('type') == 'category':
+                print(f"Category: {item.get('name')} - {len(item.get('children', []))} items")
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(f"Fetching grade tree structure for course {courseid} from Moodle...")
+
+    try:
+        result = await client.get_grade_tree(courseid)
+        
+        # Count items if possible
+        if isinstance(result, dict):
+            children_count = len(result.get('children', []))
+            await ctx.info(
+                f"Successfully retrieved grade tree for course {courseid} "
+                f"({children_count} top-level items)"
+            )
+        else:
+            await ctx.info(f"Successfully retrieved grade tree for course {courseid}")
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error fetching grade tree: {str(e)}")
+        raise
+
+
+@mcp.tool()
+async def get_feedback(
+    ctx: Context[ServerSession, MoodleClient],
+    courseid: int,
+    userid: int,
+    itemid: int
+) -> dict[str, Any]:
+    """Get feedback data for a specific user's grade in a grade item.
+
+    Returns the feedback (comment) associated with a specific student's
+    grade for a particular grade item, along with related information.
+
+    Args:
+        courseid: Course ID (required).
+        userid: User (student) ID (required).
+        itemid: Specific grade item ID (required).
+
+    Returns:
+        Dictionary containing:
+        - feedbacktext: Full feedback text (comment) for this grade
+        - title: Title of the grade item
+        - fullname: Full name of the student
+        - picture: String representing student's image (likely URL or identifier)
+        - additionalfield: Additional user field (email or ID number)
+
+    Example:
+        feedback = get_feedback(courseid=10, userid=5, itemid=42)
+        print(f"Feedback for {feedback['fullname']}: {feedback['feedbacktext']}")
+    """
+    client = ctx.request_context.lifespan_context
+
+    await ctx.info(
+        f"Fetching feedback for user {userid} on grade item {itemid} "
+        f"in course {courseid} from Moodle..."
+    )
+
+    try:
+        result = await client.get_feedback(courseid, userid, itemid)
+        
+        has_feedback = bool(result.get("feedbacktext"))
+        student_name = result.get("fullname", "Unknown")
+        item_title = result.get("title", "Unknown item")
+        
+        if has_feedback:
+            await ctx.info(
+                f"Successfully retrieved feedback for {student_name} on '{item_title}'"
+            )
+        else:
+            await ctx.info(
+                f"No feedback found for {student_name} on '{item_title}'"
+            )
+        
+        return result
+
+    except Exception as e:
+        await ctx.error(f"Error fetching feedback: {str(e)}")
         raise
 
 

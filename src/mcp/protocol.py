@@ -2,7 +2,7 @@
 import httpx
 from typing import Any
 from .utils.logger import get_logger
-from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, ManualUnenrolment, UserCreate, UserSearchCriteria
+from .models import Course, CourseUpdate, CourseContentsOption, EnrolledUsersOption, ManualEnrolment, ManualUnenrolment, UserCreate, UserSearchCriteria, GradeItemDetails, StudentGrade
 
 logger = get_logger(__name__)
 
@@ -103,7 +103,7 @@ class MoodleClient:
             data = response.json()
 
             # Check for unexpected response type
-            if not isinstance(data, (dict, list, type(None))):
+            if not isinstance(data, (dict, list, str, int, type(None))):
                 logger.error(f"Unexpected response type: {type(data).__name__}")
                 raise ValueError(f"Moodle API returned unexpected type: {type(data).__name__}")
             # Check for Moodle API error
@@ -709,6 +709,274 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {"statuses": [], "warnings": []}
+
+    async def update_grades(
+        self,
+        source: str,
+        courseid: int,
+        component: str,
+        activityid: int,
+        itemnumber: int,
+        grades: list[StudentGrade] | None = None,
+        itemdetails: GradeItemDetails | None = None
+    ) -> int:
+        """Update a grade item and associated student grades.
+
+        Calls Moodle webservice function `core_grades_update_grades`.
+
+        Args:
+            source: Source of the update (arbitrary identifier from calling component, e.g., 'my_script').
+            courseid: Course ID (required).
+            component: Component the activity belongs to (e.g., 'mod_quiz', 'mod_assign').
+            activityid: ID of the activity instance (e.g., specific quiz ID).
+            itemnumber: Grade item number for modules with multiple grades. Typically 0.
+            grades: List of StudentGrade objects with student grades to update/set (optional).
+                   Each grade must have:
+                   - studentid: Student ID
+                   - grade: Numeric grade (for scale items, must be scale option ID)
+                   - str_feedback: Feedback comment in plain text (optional)
+            itemdetails: GradeItemDetails object with grade item configuration to modify (optional).
+                        Available settings:
+                        - itemname: Name of the grade item
+                        - idnumber: Arbitrary identification number
+                        - gradetype: Grade type (0=None, 1=Value, 2=Scale, 3=Text)
+                        - grademax: Maximum grade allowed
+                        - grademin: Minimum grade allowed
+                        - scaleid: ID of custom scale (only if gradetype=2)
+                        - multfactor: Multiply all grades by this number
+                        - plusfactor: Add this value to all grades
+                        - deleted: Set to 1 to mark item as deleted
+                        - hidden: Set to 1 to hide the item
+
+        Returns:
+            Result code:
+            - 0: GRADE_UPDATE_OK (Success)
+            - 1: GRADE_UPDATE_FAILED (Failure)
+        """
+        params: dict[str, Any] = {
+            "source": source,
+            "courseid": courseid,
+            "component": component,
+            "activityid": activityid,
+            "itemnumber": itemnumber
+        }
+
+        # Add grades if provided
+        if grades:
+            params["grades"] = [grade.to_moodle_dict() for grade in grades]
+        else:
+            params["grades"] = []
+
+        # Add itemdetails if provided
+        if itemdetails:
+            params["itemdetails"] = itemdetails.to_moodle_dict()
+        else:
+            params["itemdetails"] = {}
+
+        result = await self._call_function(
+            "core_grades_update_grades",
+            **params
+        )
+
+        # Result should be an integer (0 or 1)
+        if isinstance(result, int):
+            return result
+        # If result is not an integer, consider it a failure
+        return 1
+
+    async def get_gradeitems(self, courseid: int) -> dict[str, Any]:
+        """Get grade items for a course.
+
+        Calls Moodle webservice function `core_grades_get_gradeitems`. For more extensive
+        info on each grade_item, consider using
+
+        Args:
+            courseid: Course ID (required).
+
+        Returns:
+            Dictionary containing:
+            - gradeItems: List of grade item objects:
+              * id: Unique identifier string (not numeric DB ID, e.g., "mod_quiz_1234_0")
+              * itemname: Full name of the grade item
+              * category: Name of the grade category the item belongs to (optional)
+            - warnings: List of warning objects (optional):
+              * item, itemid, warningcode, message
+        """
+        result = await self._call_function(
+            "core_grades_get_gradeitems",
+            courseid=courseid
+        )
+
+        if isinstance(result, dict):
+            return result
+        return {"gradeItems": [], "warnings": []}
+
+    async def get_grade_tree(self, courseid: int) -> dict[str, Any]:
+        """Get hierarchical grade structure (tree) for a course.
+
+        Calls Moodle webservice function `core_grades_get_grade_tree`.
+        Returns the complete gradebook structure for a course as a dictionary.
+
+        Args:
+            courseid: Course ID (required).
+
+        Returns:
+            Dictionary containing the complete gradebook structure:
+            - children: List of grade categories and items
+            - Grade categories and their hierarchy
+            - Grade items within each category
+            - Aggregation methods and weights
+            - Grade scales and maximum/minimum values
+            - Hidden/visible status of items
+            - And other gradebook configuration details
+        """
+        result = await self._call_function(
+            "core_grades_get_grade_tree",
+            courseid=courseid
+        )
+
+        # Parse JSON string if necessary (Moodle may return a JSON string)
+        if isinstance(result, str):
+            import json
+            try:
+                return json.loads(result)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse grade tree JSON: {result[:100]}")
+                return {}
+        
+        # Already a dict, return as-is
+        if isinstance(result, dict):
+            return result
+        
+        # Unexpected type, return empty dict
+        return {}
+
+    async def get_feedback(
+        self,
+        courseid: int,
+        userid: int,
+        itemid: int
+    ) -> dict[str, Any]:
+        """Get feedback data for a specific user's grade in a grade item.
+
+        Calls Moodle webservice function `core_grades_get_feedback`.
+
+        Args:
+            courseid: Course ID (required).
+            userid: User (student) ID (required).
+            itemid: Specific grade item ID (required).
+
+        Returns:
+            Dictionary containing:
+            - feedbacktext: Full feedback text (comment) for this grade
+            - title: Title of the grade item
+            - fullname: Full name of the student
+            - picture: String representing student's image (likely URL or identifier)
+            - additionalfield: Additional user field (email or ID number)
+        """
+        result = await self._call_function(
+            "core_grades_get_feedback",
+            courseid=courseid,
+            userid=userid,
+            itemid=itemid
+        )
+
+        if isinstance(result, dict):
+            return result
+        return {
+            "feedbacktext": "",
+            "title": "",
+            "fullname": "",
+            "picture": "",
+            "additionalfield": ""
+        }
+
+    async def get_grade_items_user_report(
+            self,
+            courseid: int,
+            userid: int = 0,
+            groupid: int = 0
+    ) -> dict[str, Any]:
+        """Get complete list of grade items and user grades in a course.
+
+        Calls Moodle webservice function `gradereport_user_get_grade_items`.
+        Returns the full grade report as shown in the "User report" view.
+
+        Args:
+            courseid: Course ID (required).
+            userid: User ID (optional). If specified (>0), returns grades only for this user.
+                   If 0 (default), returns grades for all visible users.
+            groupid: Group ID (optional). If specified (>0), gets users only from this group.
+                    If 0 (default), includes all groups.
+
+        Returns:
+            Dictionary containing:
+            - usergrades: List of user objects with their grades:
+              * courseid: Course ID
+              * courseidnumber: Course ID number
+              * userid: User ID
+              * userfullname: User full name
+              * useridnumber: User ID number
+              * maxdepth: Maximum depth of grade category hierarchy
+              * gradeitems: List of grade item objects with user's grades:
+                - Identification:
+                  * id: Grade item ID
+                  * itemname: Item name
+                  * itemtype: Type (e.g., 'mod', 'category', 'course')
+                  * itemmodule: Module if activity (e.g., 'quiz', 'assign')
+                  * iteminstance: Activity instance ID
+                  * itemnumber: Item number (typically 0)
+                  * idnumber: Item identification number
+                  * categoryid: Grade category ID
+                  * cmid: Course module ID (if itemtype is 'mod') (optional)
+                - Configuration:
+                  * scaleid: Scale ID used
+                  * outcomeid: Outcome ID if applicable
+                  * weightraw: Raw weight (optional)
+                  * weightformatted: Formatted weight (optional)
+                  * grademin: Minimum possible grade (optional)
+                  * grademax: Maximum possible grade (optional)
+                  * locked: 1 if item is locked for user (optional)
+                - User's Grade:
+                  * graderaw: Raw grade (numeric value) (optional)
+                  * gradeformatted: Formatted grade for display (optional)
+                  * percentageformatted: Formatted percentage (optional)
+                  * lettergradeformatted: Formatted letter grade (optional)
+                  * rangeformatted: Formatted grade range (optional)
+                  * rank: User's rank in course for this item (optional)
+                - Grade Metadata:
+                  * status: Status (e.g., 'novalue', 'loaded') (optional)
+                  * gradedatesubmitted: Submission date timestamp (optional)
+                  * gradedategraded: Grading date timestamp (optional)
+                  * gradehiddenbydate: 1 if hidden by date (optional)
+                  * gradeishidden: 1 if grade is hidden (optional)
+                  * gradeislocked: 1 if grade is locked (optional)
+                  * gradeisoverridden: 1 if grade was overridden (optional)
+                  * gradeneedsupdate: 1 if grade needs update (optional)
+                - Feedback:
+                  * feedback: Feedback comments (optional)
+                  * feedbackformat: Format (1=HTML, 0=MOODLE, 2=PLAIN, 4=MARKDOWN) (optional)
+                - Statistics:
+                  * numusers: Number of users in course (optional)
+                  * averageformatted: Formatted item average (optional)
+            - warnings: List of warning objects (optional):
+              * item, itemid, warningcode, message
+        """
+        params: dict[str, Any] = {"courseid": courseid}
+
+        if userid > 0:
+            params["userid"] = userid
+        if groupid > 0:
+            params["groupid"] = groupid
+
+        result = await self._call_function(
+            "gradereport_user_get_grade_items",
+            **params
+        )
+
+        if isinstance(result, dict):
+            return result
+        return {"usergrades": [], "warnings": []}
 
     async def update_activity_completion_status_manually(
         self,
