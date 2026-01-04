@@ -5,19 +5,6 @@ from src.mcp.protocol import MoodleClient
 from src.mcp.models import ManualEnrolment, ManualUnenrolment, UserCreate, UserSearchCriteria
 import httpx
 
-
-@pytest.fixture
-def moodle_client():
-    """Create MoodleClient instance for testing.
-    
-    Returns:
-        MoodleClient configured with test credentials
-    """
-    return MoodleClient(
-        base_url="http://localhost:8000",
-        token="test_token_123"
-    )
-
 # ============================================================================
 # GENERAL TESTS
 # ============================================================================
@@ -137,26 +124,24 @@ async def test_call_function_unexpected_type(moodle_client):
         with pytest.raises(ValueError, match="unexpected type"):
             await moodle_client._call_function("core_course_get_courses")
 
-#TODO: should i move this test to integration?
 @pytest.mark.asyncio
 async def test_call_function_moodle_error(moodle_client):
     """Test handling of Moodle API errors.
-    
-    All MOODLE API errors return a JSON with "exception" field.
-    All MOODLE API errors return an invalid parameter exception.
+
+    MOODLE API errors return a JSON with "exception" field. Also returns a message explaining the error.
     """
     mock_error_response = {
         "exception": "invalid_parameter_exception",
         "message": "Invalid parameter value detected"
     }
-    
+
     mock_response = MagicMock()
     mock_response.json.return_value = mock_error_response
     mock_response.raise_for_status = MagicMock()
-    
+
     with patch.object(moodle_client.client, 'post', new_callable=AsyncMock) as mock_post:
         mock_post.return_value = mock_response
-        
+
         with pytest.raises(ValueError, match="Invalid parameter"):
             await moodle_client._call_function("core_course_get_courses")
 

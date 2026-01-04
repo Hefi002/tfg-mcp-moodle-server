@@ -18,51 +18,6 @@ from src.mcp.server import get_courses, mcp
 
 
 # ============================================================================
-# FIXTURES
-# ============================================================================
-
-@pytest.fixture
-def mock_http_response(sample_courses):
-    """Create a mock HTTP response for httpx.AsyncClient.post.
-    
-    Returns:
-        Mock response configured with sample course data
-    """
-    mock = MagicMock()
-    mock.json.return_value = sample_courses
-    mock.raise_for_status = MagicMock()
-    return mock
-
-
-@pytest.fixture
-def mock_context():
-    """Create a mocked Context with real MoodleClient in lifespan.
-    
-    This fixture creates a MoodleClient instance but will be used
-    with mocked HTTP calls. The Context itself is mocked to simulate
-    the AI agent side.
-    
-    Returns:
-        Mock Context with request_context.lifespan_context set to real MoodleClient
-    """
-    mock_ctx = MagicMock(spec=Context)
-    mock_ctx.request_context = MagicMock()
-    
-    # Create MoodleClient (will use mocked HTTP in tests)
-    real_client = MoodleClient(
-        base_url="http://localhost:8000",
-        token="test_token_123"
-    )
-    mock_ctx.request_context.lifespan_context = real_client
-    
-    # Mock the logging methods (AI agent side)
-    mock_ctx.info = AsyncMock()
-    mock_ctx.error = AsyncMock()
-    
-    return mock_ctx
-
-
-# ============================================================================
 # CRUD OPERATIONS TESTS
 # ============================================================================
 

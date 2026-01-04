@@ -19,7 +19,21 @@ logger = get_logger(__name__)
 # Lifespan context manager
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[MoodleClient]:
-    """Manage application lifecycle with Moodle client."""
+    """Manage application lifecycle with Moodle client.
+    
+    Creates and initializes MoodleClient during server startup, yields it for use
+    throughout the server's lifetime, and ensures proper cleanup on shutdown.
+    Loads configuration from environment variables.
+    
+    Args:
+        server: FastMCP server instance
+        
+    Yields:
+        MoodleClient: Initialized Moodle API client
+        
+    Raises:
+        ValueError: If MOODLE_URL or MOODLE_TOKEN environment variables are not set
+    """
     # Get configuration from environment
     moodle_url = os.getenv("MOODLE_URL")
     moodle_token = os.getenv("MOODLE_TOKEN")
@@ -378,21 +392,6 @@ async def get_course_module(
           * Grading: grade, gradepass, gradecat, scale, advancedgrading, outcomes
           * Format: indent, score
         - warnings: List of warning objects (optional)
-
-    Examples:
-        # Get full information about a course module
-        info = get_course_module(cmid=42)
-
-        # Check if module is visible
-        if info['cm'].get('visible', 0) == 1:
-            print("Module is visible to students")
-
-        # Check completion requirements
-        cm = info['cm']
-        if cm['completion'] > 0:
-            print("Has completion tracking")
-            if cm.get('completionview'):
-                print("Requires viewing")
     """
     client = ctx.request_context.lifespan_context
 
@@ -547,21 +546,6 @@ async def manual_enrol_users(
     Returns:
         Result dictionary. An empty result ({}) indicates success.
         On error, raises an exception (e.g., invalid_parameter_exception).
-
-    Examples:
-        # Enrol user 5 in course 10 with role 5 (student)
-        enrolments = [ManualEnrolment(roleid=5, userid=5, courseid=10)]
-        
-        # Enrol with time restrictions
-        enrolments = [ManualEnrolment(
-            roleid=5, userid=5, courseid=10,
-            timestart=1640000000, timeend=1672000000
-        )]
-        
-        # Enrol in suspended state
-        enrolments = [ManualEnrolment(
-            roleid=5, userid=5, courseid=10, suspend=1
-        )]
     """
     client = ctx.request_context.lifespan_context
 
@@ -608,31 +592,6 @@ async def manual_unenrol_users(
     Returns:
         Dictionary result. An empty dictionary ({}) indicates success.
         On error, an exception is raised (e.g., invalid_parameter_exception).
-
-    Examples:
-        # Completely unenrol user 5 from course 10 (remove all roles)
-        enrolments = [ManualUnenrolment(userid=5, courseid=10)]
-        result = manual_unenrol_users(enrolments=enrolments)
-
-        # Remove only the student role (role 5) for user 5 in course 10
-        # User will remain enrolled with other roles if they have any
-        enrolments = [ManualUnenrolment(userid=5, courseid=10, roleid=5)]
-        result = manual_unenrol_users(enrolments=enrolments)
-
-        # Unenrol multiple users from the same course
-        enrolments = [
-            ManualUnenrolment(userid=5, courseid=10),
-            ManualUnenrolment(userid=6, courseid=10),
-            ManualUnenrolment(userid=7, courseid=10)
-        ]
-        result = manual_unenrol_users(enrolments=enrolments)
-
-        # Mix of complete and partial unenrolments
-        enrolments = [
-            ManualUnenrolment(userid=5, courseid=10),  # Complete unenrolment
-            ManualUnenrolment(userid=6, courseid=10, roleid=5)  # Remove only role 5
-        ]
-        result = manual_unenrol_users(enrolments=enrolments)
 
     Important Notes:
         - If roleid is not specified, the user will be COMPLETELY unenrolled
@@ -721,30 +680,6 @@ async def create_users(
         List of created user dictionaries. Each contains:
         - id: Assigned user ID in Moodle
         - username: Username of the new user
-
-    Examples:
-        # Create basic user with auto-generated password
-        users = [UserCreate(
-            username="jdoe",
-            firstname="John",
-            lastname="Doe",
-            email="jdoe@example.com",
-            createpassword=1
-        )]
-        
-        # Create user with specific password and additional info
-        users = [UserCreate(
-            username="jsmith",
-            firstname="Jane",
-            lastname="Smith",
-            email="jsmith@example.com",
-            password="SecurePass123!",
-            city="Barcelona",
-            country="ES",
-            lang="es",
-            institution="Example University",
-            department="Computer Science"
-        )]
     """
     client = ctx.request_context.lifespan_context
 
@@ -809,25 +744,6 @@ async def get_users(
           * And other optional fields (phone1, phone2, lang, timezone, etc.)
         - warnings: List of warning objects if any issues occurred:
           * item, itemid, warningcode, message
-
-    Examples:
-        # Search by user ID
-        criteria = [UserSearchCriterion(key="id", value="5")]
-        
-        # Search by username
-        criteria = [UserSearchCriterion(key="username", value="jdoe")]
-        
-        # Search by email with wildcard
-        criteria = [UserSearchCriterion(key="email", value="%@example.com")]
-        
-        # Search by multiple criteria (AND operator)
-        criteria = [
-            UserSearchCriterion(key="lastname", value="Smith"),
-            UserSearchCriterion(key="auth", value="manual")
-        ]
-        
-        # Search by partial name
-        criteria = [UserSearchCriterion(key="firstname", value="John%")]
     """
     client = ctx.request_context.lifespan_context
 
@@ -901,13 +817,6 @@ async def get_users_courses(
         - overviewfiles: List of overview files attached to course (optional)
           Each file object contains: filename, filepath, filesize, fileurl,
           timemodified, mimetype, isexternalfile, repositorytype, icon
-
-    Examples:
-        # Get all courses for user 5 with user counts
-        courses = get_users_courses(userid=5)
-        
-        # Get courses without user counts for better performance
-        courses = get_users_courses(userid=5, returnusercount=0)
     """
     client = ctx.request_context.lifespan_context
 
@@ -966,18 +875,6 @@ async def get_course_completion_status(
               * status: Extended status description (any text)
         - warnings: List of warning objects (optional):
           * item, itemid, warningcode, message
-
-    Examples:
-        # Get completion status for user 5 in course 10
-        status = get_course_completion_status(courseid=10, userid=5)
-        
-        # Check if user completed the course
-        if status['completionstatus']['completed'] == 1:
-            print("User completed the course!")
-        
-        # Check individual criteria
-        for criterion in status['completionstatus']['completions']:
-            print(f"{criterion['title']}: {criterion['status']}")
     """
     client = ctx.request_context.lifespan_context
 
@@ -1052,24 +949,6 @@ async def get_activities_completion_status(
             - rulevalue: Object with status and description
         - warnings: List of warning objects (optional):
           * item, itemid, warningcode, message
-
-    Examples:
-        # Get all activities completion status for user 5 in course 10
-        activities = get_activities_completion_status(courseid=10, userid=5)
-        
-        # Check completion status of each activity
-        for activity in activities['statuses']:
-            state_text = [
-                "Incomplete",
-                "Complete",
-                "Complete and passed",
-                "Complete and failed"
-            ][activity['state']]
-            print(f"{activity['modname']} (ID {activity['cmid']}): {state_text}")
-        
-        # Filter only completed activities
-        completed = [a for a in activities['statuses'] if a['state'] >= 1]
-        print(f"Completed activities: {len(completed)}")
     """
     client = ctx.request_context.lifespan_context
 
@@ -1139,20 +1018,6 @@ async def update_activity_completion_status_manually(
           - User does not have permission to update completion status
           - Activity or course module does not exist
           - User is not enrolled in the course containing the activity
-
-    Examples:
-        # Mark activity with cmid 42 as complete
-        result = update_activity_completion_status_manually(cmid=42, completed=1)
-        if result['status'] == 1:
-            print("Activity marked as complete!")
-
-        # Undo completion for activity with cmid 42
-        result = update_activity_completion_status_manually(cmid=42, completed=0)
-
-        # Check for warnings
-        if result.get('warnings'):
-            for warning in result['warnings']:
-                print(f"Warning: {warning['message']}")
     """
     client = ctx.request_context.lifespan_context
 
@@ -1230,14 +1095,6 @@ async def update_grades(
         Result code:
         - 0: GRADE_UPDATE_OK (Success)
         - 1: GRADE_UPDATE_FAILED (Failure)
-
-    Example:
-        grades = [StudentGrade(studentid=5, grade=85.5, str_feedback="Good work!")]
-        itemdetails = GradeItemDetails(itemname="Final Project", grademax=100.0, grademin=0.0)
-        result = update_grades(
-            source="manual_grading", courseid=10, component="mod_assign",
-            activityid=42, itemnumber=0, grades=grades, itemdetails=itemdetails
-        )
     """
     client = ctx.request_context.lifespan_context
 
@@ -1302,12 +1159,6 @@ async def get_gradeitems(
           * category: Name of the grade category the item belongs to (optional)
         - warnings: List of warning objects (optional):
           * item, itemid, warningcode, message
-
-    Example:
-        items = get_gradeitems(courseid=10)
-        for item in items['gradeItems']:
-            print(f"{item['itemname']} ({item['id']}) - {item.get('category', 'No category')}")
-        assignments = [i for i in items['gradeItems'] if i.get('category') == 'Assignments']
     """
     client = ctx.request_context.lifespan_context
 
@@ -1372,14 +1223,6 @@ async def get_grade_items_user_report(
             - Feedback: feedback, feedbackformat (optional)
             - Statistics: numusers, averageformatted (optional)
         - warnings: List of warning objects (optional)
-
-    Example:
-        report = get_grade_items_user_report(courseid=10, userid=5)
-        for user in report['usergrades']:
-            print(f"User: {user['userfullname']}")
-            for item in user['gradeitems']:
-                grade = item.get('gradeformatted', 'No grade')
-                print(f"  {item['itemname']}: {grade}")
     """
     client = ctx.request_context.lifespan_context
 
@@ -1443,12 +1286,6 @@ async def get_grade_tree(
         - Grade scales and maximum/minimum values
         - Hidden/visible status of items
         - And other gradebook configuration details
-
-    Example:
-        tree = get_grade_tree(courseid=10)
-        for item in tree.get('children', []):
-            if item.get('type') == 'category':
-                print(f"Category: {item.get('name')} - {len(item.get('children', []))} items")
     """
     client = ctx.request_context.lifespan_context
 
@@ -1498,10 +1335,6 @@ async def get_feedback(
         - fullname: Full name of the student
         - picture: String representing student's image (likely URL or identifier)
         - additionalfield: Additional user field (email or ID number)
-
-    Example:
-        feedback = get_feedback(courseid=10, userid=5, itemid=42)
-        print(f"Feedback for {feedback['fullname']}: {feedback['feedbacktext']}")
     """
     client = ctx.request_context.lifespan_context
 
@@ -1600,25 +1433,6 @@ async def get_site_info(
         
         Access:
         - userprivateaccesskey: User's private access key for secure file retrieval (optional)
-
-    Examples:
-        # Get all site and user information
-        info = get_site_info()
-        print(f"Site: {info['sitename']}")
-        print(f"User: {info['fullname']} ({info['username']})")
-        print(f"Is admin: {info.get('userissiteadmin', 0) == 1}")
-        
-        # Check available functions
-        functions = info.get('functions', [])
-        print(f"Available functions: {len(functions)}")
-        for func in functions:
-            print(f"  - {func['name']}")
-        
-        # Check user capabilities
-        if info.get('uploadfiles', 0) == 1:
-            print("User can upload files")
-        if info.get('downloadfiles', 0) == 1:
-            print("User can download files")
     """
     client = ctx.request_context.lifespan_context
 
@@ -1662,7 +1476,14 @@ async def get_site_info(
 
 
 def run_server():
-    """Entry point to run the MCP server."""
+    """Entry point to run the MCP server.
+    
+    Starts the MCP server with stdio transport for communication with AI agents.
+    This function is called when the module is run as main.
+    
+    Returns:
+        None
+    """
     logger.info("Starting Moodle MCP Server")
     mcp.run(transport="stdio")
 
