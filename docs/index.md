@@ -61,17 +61,24 @@ graph TB
    pip install -r requirements.txt
    ```
 
-4. **Run the interactive setup:**
+4. **Install development dependencies (for testing):**
+   ```bash
+   pip install -r requirements-dev.txt
+   ```
+
+5. **Run the interactive setup:**
    ```bash
    python setup.py
    ```
 
    The setup script will guide you through configuring your Moodle URL, authentication token, and logging preferences.
 
-5. **Verify the installation:**
+6. **Verify the installation:**
    ```bash
    pytest
    ```
+
+   > **Note:** You need to install `requirements-dev.txt` to run pytest (step 4).
 
 > **Note**: For detailed installation instructions, configuration options, and troubleshooting, see the [Installation and Usage Guide](usage.md).
 
