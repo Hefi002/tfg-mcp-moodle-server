@@ -157,7 +157,6 @@ Implemented in `models.py` with Pydantic, defines data models used primarily in 
 - Enrollment models (ManualEnrolment, ManualUnenrolment, EnrolledUsersOption)
 - User models (UserCreate, UserSearchCriteria)
 - Grade models (GradeItemDetails, StudentGrade)
-- And many more...
 
 ### 5. External Layer
 
