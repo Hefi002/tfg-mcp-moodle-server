@@ -385,12 +385,12 @@ class MoodleClient:
         Returns:
             Dictionary containing:
             - cm: Course module object with complete information:
-              * Identification: id, course, module, modname, instance, name, section, etc.
-              * Visibility: visible, visibleoncoursepage, availability, etc.
-              * Groups: groupmode, groupingid
-              * Completion: completion, completionview, completionpassgrade, etc.
-              * Grading: grade, gradepass, gradecat, scale, advancedgrading, outcomes
-              * Format: indent, score
+                * Identification: id, course, module, modname, instance, name, section, etc.
+                * Visibility: visible, visibleoncoursepage, availability, etc.
+                * Groups: groupmode, groupingid
+                * Completion: completion, completionview, completionpassgrade, etc.
+                * Grading: grade, gradepass, gradecat, scale, advancedgrading, outcomes
+                * Format: indent, score
             - warnings: List of warning objects (optional)
         """
         result = await self._call_function(
@@ -607,24 +607,24 @@ class MoodleClient:
 
         Args:
             criteria: List of UserSearchCriterion objects (key/value pairs).
-                     Each criterion must have:
-                     - key: User column to search by:
-                       * 'id': Match user ID (value must be numeric string)
-                       * 'lastname': Last name (can use '%' as wildcard)
-                       * 'firstname': First name (can use '%' as wildcard)
-                       * 'idnumber': ID number
-                       * 'username': Username
-                       * 'email': Email (can use '%' as wildcard)
-                       * 'auth': Authentication plugin (e.g., 'manual', 'ldap')
-                     - value: Value to search for (cannot be empty)
-                     
-                     NOTE: Each key must be unique. Search uses AND operator between
-                     valid criteria. Use '%' as wildcard for text fields.
+                Each criterion must have:
+                - key: User column to search by:
+                    * 'id': Match user ID (value must be numeric string)
+                    * 'lastname': Last name (can use '%' as wildcard)
+                    * 'firstname': First name (can use '%' as wildcard)
+                    * 'idnumber': ID number
+                    * 'username': Username
+                    * 'email': Email (can use '%' as wildcard)
+                    * 'auth': Authentication plugin (e.g., 'manual', 'ldap')
+                - value: Value to search for (cannot be empty)
+
+                NOTE: Each key must be unique. Search uses AND operator between
+                valid criteria. Use '%' as wildcard for text fields.
 
         Returns:
             Dictionary containing:
             - users: List of user dictionaries found with fields like id, username,
-              firstname, lastname, fullname, email, suspended, confirmed, and more
+            firstname, lastname, fullname, email, suspended, confirmed, and more
             - warnings: List of warning objects (optional)
         """
         # Convert UserSearchCriterion models to dictionaries
@@ -690,9 +690,9 @@ class MoodleClient:
         Returns:
             Dictionary containing:
             - completionstatus: Completion status object:
-              * completed: 1 if course is complete, 0 otherwise
-              * aggregation: Aggregation method (1=ALL criteria, 2=ANY criteria)
-              * completions: List of completion criteria with their status
+                * completed: 1 if course is complete, 0 otherwise
+                * aggregation: Aggregation method (1=ALL criteria, 2=ANY criteria)
+                * completions: List of completion criteria with their status
             - warnings: List of warning objects (optional)
         """
         result = await self._call_function(
@@ -721,9 +721,9 @@ class MoodleClient:
         Returns:
             Dictionary containing:
             - statuses: List of activity completion status objects with fields like:
-              * cmid, modname, instance, state, timecompleted, tracking
-              * hascompletion, isautomatic, istrackeduser, uservisible
-              * details: List of completion rule details (optional)
+                * cmid, modname, instance, state, timecompleted, tracking
+                * hascompletion, isautomatic, istrackeduser, uservisible
+                * details: List of completion rule details (optional)
             - warnings: List of warning objects (optional)
         """
         result = await self._call_function(
@@ -879,8 +879,8 @@ class MoodleClient:
         Returns:
             Dictionary containing:
             - usergrades: List of user objects with their grades. Each contains:
-              * courseid, userid, userfullname, useridnumber, maxdepth
-              * gradeitems: List of grade item objects with user's grades including
+                * courseid, userid, userfullname, useridnumber, maxdepth
+                * gradeitems: List of grade item objects with user's grades including
                 identification, configuration, user's grade, metadata, feedback, and statistics
             - warnings: List of warning objects (optional)
         """

@@ -385,12 +385,12 @@ async def get_course_module(
     Returns:
         Dictionary containing:
         - cm: Course module object with complete information:
-          * Identification: id, course, module, modname, instance, name, section, etc.
-          * Visibility: visible, visibleoncoursepage, availability, etc.
-          * Groups: groupmode, groupingid
-          * Completion: completion, completionview, completionpassgrade, etc.
-          * Grading: grade, gradepass, gradecat, scale, advancedgrading, outcomes
-          * Format: indent, score
+            * Identification: id, course, module, modname, instance, name, section, etc.
+            * Visibility: visible, visibleoncoursepage, availability, etc.
+            * Groups: groupmode, groupingid
+            * Completion: completion, completionview, completionpassgrade, etc.
+            * Grading: grade, gradepass, gradecat, scale, advancedgrading, outcomes
+            * Format: indent, score
         - warnings: List of warning objects (optional)
     """
     client = ctx.request_context.lifespan_context
@@ -729,21 +729,21 @@ async def get_users(
     Returns:
         Dictionary containing:
         - users: List of user dictionaries found. Each user contains:
-          * id: User ID
-          * username, firstname, lastname (optional)
-          * fullname: Full name
-          * email (optional)
-          * auth: Authentication plugin (optional)
-          * suspended: 1 if suspended, 0 if active (optional)
-          * confirmed: 1 if confirmed (optional)
-          * idnumber, institution, department (optional)
-          * city, country (optional)
-          * profileimageurl, profileimageurlsmall: Profile image URLs
-          * customfields: List of custom profile fields (optional)
-          * preferences: List of user preferences (optional)
-          * And other optional fields (phone1, phone2, lang, timezone, etc.)
+            * id: User ID
+            * username, firstname, lastname (optional)
+            * fullname: Full name
+            * email (optional)
+            * auth: Authentication plugin (optional)
+            * suspended: 1 if suspended, 0 if active (optional)
+            * confirmed: 1 if confirmed (optional)
+            * idnumber, institution, department (optional)
+            * city, country (optional)
+            * profileimageurl, profileimageurlsmall: Profile image URLs
+            * customfields: List of custom profile fields (optional)
+            * preferences: List of user preferences (optional)
+            * And other optional fields (phone1, phone2, lang, timezone, etc.)
         - warnings: List of warning objects if any issues occurred:
-          * item, itemid, warningcode, message
+            * item, itemid, warningcode, message
     """
     client = ctx.request_context.lifespan_context
 
@@ -815,8 +815,8 @@ async def get_users_courses(
         - showactivitydates: 1 if activity dates are shown
         - showcompletionconditions: 1 if completion conditions are shown
         - overviewfiles: List of overview files attached to course (optional)
-          Each file object contains: filename, filepath, filesize, fileurl,
-          timemodified, mimetype, isexternalfile, repositorytype, icon
+            Each file object contains: filename, filepath, filesize, fileurl,
+            timemodified, mimetype, isexternalfile, repositorytype, icon
     """
     client = ctx.request_context.lifespan_context
 
@@ -858,11 +858,11 @@ async def get_course_completion_status(
     Returns:
         Dictionary containing:
         - completionstatus: Completion status object:
-          * completed: 1 if course is complete for the user, 0 otherwise
-          * aggregation: Aggregation method for criteria:
+            * completed: 1 if course is complete for the user, 0 otherwise
+            * aggregation: Aggregation method for criteria:
             - 1 (ALL): All criteria must be met
             - 2 (ANY): At least one criterion must be met
-          * completions: List of detailed completion criteria:
+            * completions: List of detailed completion criteria:
             - type: Criterion type code (numeric)
             - title: Criterion title
             - status: Status as readable text (e.g., "Yes", "No", "50%")
@@ -874,7 +874,7 @@ async def get_course_completion_status(
               * requirement: Requirement description
               * status: Extended status description (any text)
         - warnings: List of warning objects (optional):
-          * item, itemid, warningcode, message
+            * item, itemid, warningcode, message
     """
     client = ctx.request_context.lifespan_context
 
@@ -924,31 +924,31 @@ async def get_activities_completion_status(
     Returns:
         Dictionary containing:
         - statuses: List of activity completion status objects:
-          * cmid: Course module ID
-          * modname: Module type name (e.g., 'quiz', 'assign', 'forum')
-          * instance: Activity instance ID within the module
-          * state: Completion state:
+            * cmid: Course module ID
+            * modname: Module type name (e.g., 'quiz', 'assign', 'forum')
+            * instance: Activity instance ID within the module
+            * state: Completion state:
             - 0: Incomplete
             - 1: Complete
             - 2: Complete and passed
             - 3: Complete and failed
-          * timecompleted: Timestamp when completed (0 if not complete)
-          * tracking: Completion tracking type:
+            * timecompleted: Timestamp when completed (0 if not complete)
+            * tracking: Completion tracking type:
             - 0: None
             - 1: Manual
             - 2: Automatic
-          * overrideby: User ID who overrode the status, or null (optional)
-          * hascompletion: 1 if completion enabled for this activity (optional)
-          * isautomatic: 1 if activity tracks completion automatically (optional)
-          * istrackeduser: 1 if completion tracked for this user (optional)
-          * uservisible: 1 if activity is visible to user (optional)
-          * isoverallcomplete: 1 if overall completion should be marked complete (optional)
-          * valueused: If completion status affects another activity availability (optional)
-          * details: List of completion rule details (optional):
+            * overrideby: User ID who overrode the status, or null (optional)
+            * hascompletion: 1 if completion enabled for this activity (optional)
+            * isautomatic: 1 if activity tracks completion automatically (optional)
+            * istrackeduser: 1 if completion tracked for this user (optional)
+            * uservisible: 1 if activity is visible to user (optional)
+            * isoverallcomplete: 1 if overall completion should be marked complete (optional)
+            * valueused: If completion status affects another activity availability (optional)
+            * details: List of completion rule details (optional):
             - rulename: Name of the rule
             - rulevalue: Object with status and description
         - warnings: List of warning objects (optional):
-          * item, itemid, warningcode, message
+            * item, itemid, warningcode, message
     """
     client = ctx.request_context.lifespan_context
 
@@ -1005,19 +1005,19 @@ async def update_activity_completion_status_manually(
     Returns:
         Dictionary containing:
         - status: Operation result:
-          * 1: Operation was successful
-          * 0: Operation failed
+            * 1: Operation was successful
+            * 0: Operation failed
         - warnings: List of warning objects (optional):
-          * item: Item type identifier (e.g., 'cmid')
-          * itemid: Specific item ID that caused the warning
-          * warningcode: Code identifying the type of warning
-          * message: Human-readable description of the warning
+            * item: Item type identifier (e.g., 'cmid')
+            * itemid: Specific item ID that caused the warning
+            * warningcode: Code identifying the type of warning
+            * message: Human-readable description of the warning
 
-          Common warnings include:
-          - Activity does not have manual completion tracking enabled
-          - User does not have permission to update completion status
-          - Activity or course module does not exist
-          - User is not enrolled in the course containing the activity
+            Common warnings include:
+            - Activity does not have manual completion tracking enabled
+            - User does not have permission to update completion status
+            - Activity or course module does not exist
+            - User is not enrolled in the course containing the activity
     """
     client = ctx.request_context.lifespan_context
 
@@ -1154,11 +1154,11 @@ async def get_gradeitems(
     Returns:
         Dictionary containing:
         - gradeItems: List of grade item objects:
-          * id: Unique identifier string (not numeric DB ID, e.g., "mod_quiz_1234_0")
-          * itemname: Full name of the grade item
-          * category: Name of the grade category the item belongs to (optional)
+            * id: Unique identifier string (not numeric DB ID, e.g., "mod_quiz_1234_0")
+            * itemname: Full name of the grade item
+            * category: Name of the grade category the item belongs to (optional)
         - warnings: List of warning objects (optional):
-          * item, itemid, warningcode, message
+            * item, itemid, warningcode, message
     """
     client = ctx.request_context.lifespan_context
 
@@ -1205,13 +1205,13 @@ async def get_grade_items_user_report(
     Returns:
         Dictionary containing:
         - usergrades: List of user objects with their grades:
-          * courseid: Course ID
-          * courseidnumber: Course ID number
-          * userid: User ID
-          * userfullname: User full name
-          * useridnumber: User ID number
-          * maxdepth: Maximum depth of grade category hierarchy
-          * gradeitems: List of grade item objects with user's grades:
+            * courseid: Course ID
+            * courseidnumber: Course ID number
+            * userid: User ID
+            * userfullname: User full name
+            * useridnumber: User ID number
+            * maxdepth: Maximum depth of grade category hierarchy
+            * gradeitems: List of grade item objects with user's grades:
             - Identification: id, itemname, itemtype, itemmodule, iteminstance, itemnumber,
               idnumber, categoryid, cmid (optional)
             - Configuration: scaleid, outcomeid, weightraw, weightformatted, grademin,
@@ -1427,14 +1427,14 @@ async def get_site_info(
         Webservice Functions:
 
         - functions: List of available webservice function objects. Each contains:
-          * name: Name of the webservice function (e.g., 'core_course_get_courses')
-          * version: Version of the component providing the function
+            * name: Name of the webservice function (e.g., 'core_course_get_courses')
+            * version: Version of the component providing the function
 
         Advanced Features:
 
         - advancedfeatures: List of site's advanced features and their status (optional):
-          * name: Feature name
-          * value: Usually 1 when enabled, 0 when disabled
+            * name: Feature name
+            * value: Usually 1 when enabled, 0 when disabled
 
         Access:
 
