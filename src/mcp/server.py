@@ -534,7 +534,7 @@ async def manual_enrol_users(
                    - roleid: Role ID to assign to the user in the course
                    - userid: User ID to enrol
                    - courseid: Course ID in which to enrol the user
-                   
+
                    Optional fields:
                    - timestart: Enrolment start timestamp (Unix timestamp).
                                0 means immediate or use default configuration
@@ -1389,6 +1389,7 @@ async def get_site_info(
         Dictionary containing extensive site and user information:
         
         User Information:
+
         - userid: Current user ID
         - username: Username of the authenticated user
         - firstname: User's first name
@@ -1399,8 +1400,9 @@ async def get_site_info(
         - userissiteadmin: 1 if user is site administrator (optional)
         - userhomepage: Default homepage setting (0=Site, 1=Dashboard, 4=Custom) (optional)
         - userhomepageurl: Custom homepage URL if userhomepage is 4 (optional)
-        
+
         Site Information:
+
         - sitename: Name of the Moodle site
         - siteurl: Base URL of the site
         - siteid: ID of the site course (optional)
@@ -1410,8 +1412,9 @@ async def get_site_info(
         - sitecalendartype: Calendar type configured for the site (optional)
         - usercalendartype: Calendar type used by this user (optional)
         - theme: Current theme name for the user (optional)
-        
+
         Capabilities and Limits:
+
         - downloadfiles: 1 if user can download files (optional)
         - uploadfiles: 1 if user can upload files (optional)
         - usercanmanageownfiles: 1 if user can manage their own files (optional)
@@ -1420,18 +1423,21 @@ async def get_site_info(
         - limitconcurrentlogins: Number of concurrent sessions allowed (optional)
         - usersessionscount: Number of currently active sessions for this user (optional)
         - policyagreed: 1 if user has agreed to all site policies (optional)
-        
+
         Webservice Functions:
+
         - functions: List of available webservice function objects. Each contains:
           * name: Name of the webservice function (e.g., 'core_course_get_courses')
           * version: Version of the component providing the function
-        
+
         Advanced Features:
+
         - advancedfeatures: List of site's advanced features and their status (optional):
           * name: Feature name
           * value: Usually 1 when enabled, 0 when disabled
-        
+
         Access:
+
         - userprivateaccesskey: User's private access key for secure file retrieval (optional)
     """
     client = ctx.request_context.lifespan_context

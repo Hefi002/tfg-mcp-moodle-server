@@ -7,31 +7,38 @@ This section contains the complete documentation of all project modules.
 The project is organized into the following modules:
 
 ### Models (`models.py`)
+
 Pydantic models for validation and serialization of Moodle API data.
 
 **Includes**:
+
 - Course models (Course, CourseUpdate, CourseContentsOption)
 - Enrollment models (ManualEnrolment, ManualUnenrolment, EnrolledUsersOption)
 - User models (UserCreate, UserSearchCriteria)
 - Grade models (GradeItemDetails, StudentGrade)
 
 ### Protocol (`protocol.py`)
+
 Protocol layer that handles communication with the Moodle Web Services API.
 
 **Main class**: `MoodleClient`
 
 **Key functions**:
+
 - `flatten_params()`: Converts nested structures to Moodle format
 - Methods for all CRUD operations on courses, users, enrollments, grades, etc.
 
 ### Server (`server.py`)
+
 MCP server that exposes tools for AI agents.
 
 **Main components**:
+
 - `app_lifespan()`: Context manager for server lifecycle
 - Tools decorated with `@mcp.tool()` for each available operation
 
 **Tool categories**:
+
 - Course Tools: Course management
 - Enrolment Tools: Enrollments
 - User Tools: User management

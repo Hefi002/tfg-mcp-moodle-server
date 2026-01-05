@@ -110,7 +110,7 @@ async def test_call_function_with_parameters(moodle_client):
 async def test_call_function_unexpected_type(moodle_client):
     """Test _call_function handles completely unexpected response types.
     
-    The API now accepts dict, list, str, int, and None as valid response types.
+    The API accepts dict, list, str, int, and None as valid response types.
     This test verifies that truly unexpected types (e.g., float, bool)
     still raise ValueError.
     """
@@ -126,9 +126,9 @@ async def test_call_function_unexpected_type(moodle_client):
 
 @pytest.mark.asyncio
 async def test_call_function_moodle_error(moodle_client):
-    """Test handling of Moodle API errors.
+    """Test handling of protocol errors, handled by Moodle API.
 
-    MOODLE API errors return a JSON with "exception" field. Also returns a message explaining the error.
+    MOODLE API protocol errors return a JSON with "exception" field. Also returns a message explaining the error.
     """
     mock_error_response = {
         "exception": "invalid_parameter_exception",

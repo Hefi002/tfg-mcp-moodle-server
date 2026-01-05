@@ -11,12 +11,14 @@ The project implements two main types of tests:
 Test the protocol layer (`MoodleClient`) in isolation.
 
 **Mocking strategy**:
+
 - Mock only the HTTP layer (`httpx.AsyncClient.post`)
 - Keep all `MoodleClient` logic unmocked
 - Validate that requests have the correct format
 - Validate that responses are processed correctly
 
 **What is tested**:
+
 - Client initialization
 - Parameter flattening
 - Moodle API error handling
@@ -29,12 +31,14 @@ Test the protocol layer (`MoodleClient`) in isolation.
 Test the complete integration between MCP Server and MoodleClient.
 
 **Mocking strategy**:
+
 - Mock only the HTTP layer (same as unit tests)
 - Keep both `MoodleClient` and MCP tools unmocked
 - Mock the Context (AI agent side)
 - Test the complete data flow
 
 **What is tested**:
+
 - Complete CRUD operations (Create, Read, Update, Delete)
 - Error handling propagated from Moodle API
 - HTTP error handling
@@ -143,6 +147,7 @@ ptw
 ### Current Status
 
 Run to see current status:
+
 ```bash
 pytest --cov=src --cov-report=term
 ```
@@ -150,17 +155,20 @@ pytest --cov=src --cov-report=term
 ### Covered Areas
 
 ✅ **Protocol Layer** (`protocol.py`):
+
 - All methods of `MoodleClient`
 - `flatten_params()` function
 - Error handling in `_call_function()`
 - Model conversion
 
 ✅ **Server Layer** (`server.py`):
+
 - All MCP server tools
 - Server lifecycle
 - Error handling
 
 ✅ **Models** (`models.py`):
+
 - Pydantic model validation
 - Conversion to Moodle format
 - Custom validators

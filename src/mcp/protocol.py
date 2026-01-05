@@ -20,8 +20,9 @@ def flatten_params(params: dict[str, Any], parent_key: str = '') -> dict[str, An
     
     Returns:
         Flattened dictionary with Moodle-formatted keys
-        
+
     Example:
+
         Input: {"courses": [{"fullname": "Test", "categoryid": 1}]}
         Output: {"courses[0][fullname]": "Test", "courses[0][categoryid]": 1}
     """

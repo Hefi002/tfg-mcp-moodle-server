@@ -21,7 +21,7 @@ The project follows a layered architecture:
 
 ```mermaid
 graph TB
-    A[AI Agent / Claude] --> B[MCP Server Layer]
+    A[AI Agent] --> B[MCP Server Layer]
     B --> C[Protocol Layer / MoodleClient]
     C --> D[Moodle Web Services API]
     
@@ -39,38 +39,78 @@ graph TB
 
 ### Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/tfg-mcp-moodle-server.git
-cd tfg-mcp-moodle-server
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/yourusername/tfg-mcp-moodle-server.git
+   cd tfg-mcp-moodle-server
+   ```
 
-# Install dependencies
-pip install -r requirements.txt
-```
+2. **Create a virtual environment:**
+   ```bash
+   # Windows
+   python -m venv venv
+   venv\Scripts\activate
 
-### Configuration
+   # Linux/Mac
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
 
-Create a `.env` file:
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-```env
-MOODLE_URL=http://localhost:8000
-MOODLE_TOKEN=your_token_here
-```
+4. **Run the interactive setup:**
+   ```bash
+   python setup.py
+   ```
 
-### Usage with Claude Desktop
+   The setup script will guide you through configuring your Moodle URL, authentication token, and logging preferences.
 
-Add to Claude's configuration file:
+5. **Verify the installation:**
+   ```bash
+   pytest
+   ```
+
+> **Note**: For detailed installation instructions, configuration options, and troubleshooting, see the [Installation and Usage Guide](usage.md).
+
+## Usage with Claude Desktop
+
+Claude Desktop is used as example, each AI has its methods of adding an MCP tool.
+
+To add the server to your Claude Desktop configuration:
+
+1. Open `claude-desktop` and go to the settings.
+2. Navigate to the `Developer` section, then choose `Edit config`.
+3. Edit the file claude_desktop_config.json to add the following MCP server configuration:
 
 ```json
 {
   "mcpServers": {
-    "moodle": {
+    "mcpMoodleAPI": {
       "command": "python",
       "args": ["-m", "src.mcp.server"],
-      "cwd": "/path/to/tfg-mcp-moodle-server"
+      "cwd": "/path/to/tfg-mcp-moodle-server",
+      "env": {
+        "PYTHONPATH": "/path/to/tfg-mcp-moodle-server"
+      }
     }
   }
 }
+```
+
+4. Once added, restart Claude Desktop to apply the changes.
+
+### Example Usage
+
+Once connected, you can use natural language to interact with Moodle:
+
+```
+"Show me all courses in my Moodle instance"
+"Get the enrolled users in course ID 5"
+"What's the completion status for user 10 in course 3?"
+"List all assignments in course 'Introduction to Python'"
 ```
 
 ## Documentation
@@ -95,11 +135,21 @@ pytest tests/test_moodle.py
 
 ## License
 
-[Specify license]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Author
 
-Bachelor's Thesis Project (TFG)
+**Author**: Eric Herrero Espada
+
+**Program**: Grau en Enginyeria Informàtica (Bachelor's Degree in Computer Engineering)
+
+**Institution**: Universitat Politècnica de Catalunya
+
+**Academic Year**: 2025-2026
+
+**Thesis Supervisor**: Marc Alier Forment
+
+**Thesis Type**: (Treball de Fi de Grau) Final Degree Project
 
 ---
 
