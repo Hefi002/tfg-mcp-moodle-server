@@ -6,7 +6,7 @@
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/tfg-mcp-moodle-server.git
+   git clone https://github.com/Hefi002/tfg-mcp-moodle-server.git
    cd tfg-mcp-moodle-server
    ```
 
@@ -47,7 +47,7 @@
 
 ### Manual Setup
 
-If you prefer to configure manually:
+If you prefer to configure your .env manually (step 5 on installation):
 
 1. **Copy the example environment file:**
    ```bash
@@ -60,16 +60,6 @@ If you prefer to configure manually:
    MOODLE_TOKEN=your_authentication_token_here
    LOG_LEVEL=INFO
    DEBUG=false
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Install development dependencies (for testing):**
-   ```bash
-   pip install -r requirements-dev.txt
    ```
 
 ## Getting Your Moodle Token
@@ -140,126 +130,151 @@ The server uses the following environment variables (configured in `.env`):
 - Apply IP restrictions when possible for tokens
 - Set expiration dates for tokens in production
 
-## Configuration with Claude Desktop
+## Usage
+
+### Starting the Server
+
+1. **Activate your virtual environment:**
+   ```bash
+   # Windows
+   venv\Scripts\activate
+
+   # Linux/Mac
+   source venv/bin/activate
+   ```
+   
+2. **Run the server:**
+   ```bash
+   python -m src
+   ```
+   
+   Or alternatively:
+   ```bash
+   python -m src.mcp.server
+   ```
+
+3. **To close the server once you are done:**
+    - Press `CTRL + C` in the terminal
+    - Then exit your virtual environment:
+    ```bash
+    deactivate
+    ```
+
+### Connecting with Claude Desktop
 
 Claude Desktop is used as example, each AI has its methods of adding an MCP tool.
 
-### 1. Locate configuration file
+To add the server to your Claude Desktop configuration:
 
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+1. Open Claude Desktop and go to `Settings`.
+2. Navigate to the `Developer` section, then choose `Edit config`.
+3. Edit the file `claude_desktop_config.json` to add the following MCP server configuration:
 
-### 2. Add MCP server
-
-Edit `claude_desktop_config.json`:
+#### Windows
 
 ```json
 {
   "mcpServers": {
-    "mcpMoodleAPI": {
-      "command": "python",
+    "moodle-api": {
+      "command": "C:\\path\\to\\tfg-mcp-moodle-server\\venv\\Scripts\\python.exe",
       "args": ["-m", "src.mcp.server"],
-      "cwd": "C:\\full\\path\\to\\tfg-mcp-moodle-server",
+      "cwd": "C:\\path\\to\\tfg-mcp-moodle-server",
       "env": {
-        "PYTHONPATH": "C:\\full\\path\\to\\tfg-mcp-moodle-server"
+        "PYTHONPATH": "C:\\path\\to\\tfg-mcp-moodle-server"
       }
     }
   }
 }
 ```
 
-**Note**: Adjust the `cwd` and `PYTHONPATH` to the actual location of your project.
+**Important notes:**
+- Replace `C:\\path\\to\\tfg-mcp-moodle-server` with the actual path where you cloned the project
+- The "command" path must point to the `python.exe` inside your `venv` folder
 
-### 3. Restart Claude Desktop
+#### Linux/macOS
 
-Completely close Claude Desktop and open it again.
-
-### 4. Verify connection
-
-In Claude, you should see the Moodle tools available in the connectors section.
-
-## Usage Examples
-
-### Example 1: List Courses
-
-Ask Claude:
-
-```
-Can you show me all available courses in Moodle?
-```
-
-Claude will use the `get_courses` tool automatically.
-
-### Example 2: Create a Course
-
-```
-Create a course called "Introduction to Python 2024" 
-with short code "PY101" in category 1
-```
-
-Claude will use `create_courses` with the appropriate parameters.
-
-### Example 3: Enroll User
-
-```
-Enroll user with ID 5 in course with ID 10 
-with the student role (roleid 5)
-```
-
-Claude will use `manual_enrol_users`.
-
-## Advanced Configuration
-
-### Additional Environment Variables
-
-```env
-# Optional: Logging configuration
-LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-
-# Optional: HTTP request timeout
-HTTP_TIMEOUT=30
-```
-
-### Development Configuration
-
-For development, create a `.env.development`:
-
-```env
-MOODLE_URL=http://localhost:8000
-MOODLE_TOKEN=development_token
-LOG_LEVEL=DEBUG
-```
-
-And use it:
-
-```bash
-# Linux/Mac
-export $(cat .env.development | xargs)
-
-# Windows PowerShell
-Get-Content .env.development | ForEach-Object { 
-    if($_ -match "^([^=]+)=(.*)$") { 
-        [Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process") 
-    } 
+```json
+{
+  "mcpServers": {
+    "moodle-api": {
+      "command": "/path/to/tfg-mcp-moodle-server/venv/bin/python",
+      "args": ["-m", "src.mcp.server"],
+      "cwd": "/path/to/tfg-mcp-moodle-server",
+      "env": {
+        "PYTHONPATH": "/path/to/tfg-mcp-moodle-server"
+      }
+    }
+  }
 }
+```
+
+**Important notes:**
+- Replace `/path/to/tfg-mcp-moodle-server` with the actual path where you cloned the project
+- Use forward slashes (`/`) in paths for Linux/macOS
+- The path must point to the `python` executable inside your `venv` folder
+
+4. Once added, restart Claude Desktop to apply the changes.
+
+### Example Usage
+
+Once connected, you can use natural language to interact with Moodle:
+
+```
+"Show me all courses in my Moodle instance"
+"Get the enrolled users in course ID 5"
+"What's the completion status for user 10 in course 3?"
+"List all assignments in course 'Introduction to Python'"
 ```
 
 ## Troubleshooting
 
-### Server doesn't connect
+### Error: "Could not attach to MCP server"
 
-1. Verify that environment variables are correctly configured
-2. Verify that the Moodle token is valid
-3. Verify that Moodle has Web Services enabled
-4. Check server logs
+Verify the following:
+
+1. **Correct path to Python in venv:**
+   ```bash
+   # Windows - verify this file exists:
+   C:\path\to\tfg-mcp-moodle-server\venv\Scripts\python.exe
+   
+   # Linux/macOS - verify this file exists:
+   /path/to/tfg-mcp-moodle-server/venv/bin/python
+   ```
+
+2. **Dependencies installed:**
+   ```bash
+   # Activate venv and verify they are installed
+   # Windows
+   venv\Scripts\activate
+   pip list
+   
+   # Linux/macOS
+   source venv/bin/activate
+   pip list
+   ```
+
+3. **`.env` file configured:**
+   ```bash
+   # Verify it exists in the project root
+   ls .env  # or dir .env on Windows
+   ```
+
+4. **Correct JSON syntax:**
+   - On Windows: use `\\` in paths
+   - On Linux/macOS: use `/` in paths
+   - Don't forget commas between elements
 
 ### Claude doesn't recognize the tools
 
 1. Verify that `claude_desktop_config.json` is correctly formatted
-2. Completely restart Claude Desktop
+2. **Completely** restart Claude Desktop (close it from the system tray if it's there)
 3. Verify that the `cwd` path is correct
-4. Verify that Python is in the PATH
+4. Check Claude Desktop logs for more details
+
+**Log locations:**
+- **Windows:** `%APPDATA%\Claude\logs\`
+- **macOS:** `~/Library/Logs/Claude/`
+- **Linux:** `~/.config/Claude/logs/`
 
 ### Moodle permission errors
 
@@ -267,9 +282,10 @@ If you receive permission errors:
 
 1. Verify that the token user has the necessary capabilities
 2. Check Moodle logs for more details
-3. Make sure the user has permissions in the correct context
+3. Make sure the user has permissions in the correct context (system, category, or course)
+4. Verify that Web Services are enabled in your Moodle instance
 
-## Next Steps
+## Other Documentation
 
 - [Architecture](architecture.md) - Understand how the system works
 - [API Reference](api.md) - Complete API documentation

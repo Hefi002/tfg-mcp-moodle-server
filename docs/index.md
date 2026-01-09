@@ -41,7 +41,7 @@ graph TB
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/tfg-mcp-moodle-server.git
+   git clone https://github.com/Hefi002/tfg-mcp-moodle-server.git
    cd tfg-mcp-moodle-server
    ```
 
@@ -82,21 +82,68 @@ graph TB
 
 > **Note**: For detailed installation instructions, configuration options, and troubleshooting, see the [Installation and Usage Guide](usage.md).
 
-## Usage with Claude Desktop
+## Usage
+
+### Starting the Server
+
+1. **Activate your virtual environment:**
+   ```bash
+   # Windows
+   venv\Scripts\activate
+
+   # Linux/Mac
+   source venv/bin/activate
+   ```
+   
+2. **Run the server:**
+   ```bash
+   python -m src
+   ```
+   
+   Or alternatively:
+   ```bash
+   python -m src.mcp.server
+   ```
+
+3. **To close the server once you are done:**
+    - Press `CTRL + C` in the terminal
+    - Then exit your virtual environment:
+    ```bash
+    deactivate
+    ```
+
+### Connecting with Claude Desktop
 
 Claude Desktop is used as example, each AI has its methods of adding an MCP tool.
 
 To add the server to your Claude Desktop configuration:
 
-1. Open `claude-desktop` and go to the settings.
+1. Open Claude Desktop and go to `Settings`.
 2. Navigate to the `Developer` section, then choose `Edit config`.
-3. Edit the file claude_desktop_config.json to add the following MCP server configuration:
+3. Edit the file `claude_desktop_config.json` to add the following MCP server configuration:
 
+**Windows:**
 ```json
 {
   "mcpServers": {
-    "mcpMoodleAPI": {
-      "command": "python",
+    "moodle-api": {
+      "command": "C:\\path\\to\\tfg-mcp-moodle-server\\venv\\Scripts\\python.exe",
+      "args": ["-m", "src.mcp.server"],
+      "cwd": "C:\\path\\to\\tfg-mcp-moodle-server",
+      "env": {
+        "PYTHONPATH": "C:\\path\\to\\tfg-mcp-moodle-server"
+      }
+    }
+  }
+}
+```
+
+**Linux/macOS:**
+```json
+{
+  "mcpServers": {
+    "moodle-api": {
+      "command": "/path/to/tfg-mcp-moodle-server/venv/bin/python",
       "args": ["-m", "src.mcp.server"],
       "cwd": "/path/to/tfg-mcp-moodle-server",
       "env": {
@@ -107,7 +154,8 @@ To add the server to your Claude Desktop configuration:
 }
 ```
 
-4. Once added, restart Claude Desktop to apply the changes.
+4. Replace `/path/to/tfg-mcp-moodle-server` with the actual path where you cloned the project.
+5. Once added, restart Claude Desktop to apply the changes.
 
 ### Example Usage
 

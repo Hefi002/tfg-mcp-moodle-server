@@ -184,34 +184,74 @@ The server uses the following environment variables (configured in `.env`):
 
 ### Starting the Server
 
-```bash
-python -m src.main
-```
+1. **Activate your virtual environment:**
+   ```bash
+   # Windows
+   venv\Scripts\activate
+
+   # Linux/Mac
+   source venv/bin/activate
+   ```
+   
+2. **Run the server:**
+   ```bash
+   python -m src
+   ```
+   
+   Or alternatively:
+   ```bash
+   python -m src.mcp.server
+   ```
+
+3. **To close the server once you are done:**
+    - Press `CTRL + C` in the terminal
+    - Then exit your virtual environment:
+    ```bash
+    deactivate
+    ```
 
 ### Connecting with Claude Desktop
 
 Claude Desktop is used as example, each AI has its methods of adding an MCP tool.
 To add the server to your Claude Desktop configuration:
-- Open `claude-desktop` and go to the settings.
+- Open Claude Desktop and go to `Settings`.
 - Navigate to the `Developer` section, then choose `Edit config`.
 - Edit the file claude_desktop_config.json to add the following MCP server configuration:
 
+**Windows:**
 ```json
 {
   "mcpServers": {
-    "mcpMoodleAPI": {
-      "command": "python",
+    "moodle-api": {
+      "command": "C:\\path\\to\\tfg-mcp-moodle-server\\venv\\Scripts\\python.exe",
+      "args": ["-m", "src.mcp.server"],
+      "cwd": "C:\\path\\to\\tfg-mcp-moodle-server", 
+       "env": {
+        "PYTHONPATH": "C:\\path\\to\\tfg-mcp-moodle-server"
+      }
+    }
+  }
+}
+```
+
+**Linux/macOS:**
+```json
+{
+  "mcpServers": {
+    "moodle-api": {
+      "command": "/path/to/tfg-mcp-moodle-server/venv/bin/python",
       "args": ["-m", "src.mcp.server"],
       "cwd": "/path/to/tfg-mcp-moodle-server",
-      "env": {
+       "env": {
         "PYTHONPATH": "/path/to/tfg-mcp-moodle-server"
       }
     }
   }
 }
 ```
- - Once added, restart Claude Desktop to apply the changes.
 
+- Replace `/path/to/tfg-mcp-moodle-server` with the actual path where you cloned the project.
+- Once added, restart Claude Desktop to apply the changes.
 
 ### Example Usage
 
@@ -223,6 +263,25 @@ Once connected, you can use natural language to interact with Moodle:
 "What's the completion status for user 10 in course 3?"
 "List all assignments in course 'Introduction to Python'"
 ```
+
+## 📖 Documentation
+
+Full documentation is available by serving the documentation on your computer:
+
+```bash
+  # Install documentation dependencies
+  pip install mkdocs mkdocs-material mkdocstrings[python]
+  
+  # Serve documentation locally
+  mkdocs serve
+```
+  Then open http://127.0.0.1:8000 in your browser.
+
+Documentation covers:
+- [Installation & Usage Guide](docs/usage.md)
+- [Architecture Overview](docs/architecture.md)
+- [API Reference](docs/api.md)
+- [Testing Guide](docs/testing.md)
 
 ## Testing
 

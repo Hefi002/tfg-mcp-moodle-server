@@ -52,7 +52,7 @@ def get_input(prompt, default=None, required=True):
             return default
         
         if not value and required:
-            print("⚠️  This field is required. Please enter a value.")
+            print("This field is required. Please enter a value.")
             continue
         
         return value
@@ -98,19 +98,22 @@ def create_env_file(config):
     Args:
         config: Dictionary with configuration
     """
-    # Get project root directory (parent of scripts directory)
-    project_root = Path(__file__).parent.parent
+    # Get project root directory (where setup.py is located)
+    project_root = Path(__file__).parent
     env_path = project_root / '.env'
     
     # Check if it already exists
     if env_path.exists():
-        print(f"\n⚠️  The .env file already exists at: {env_path}")
+        print(f"\nThe .env file already exists at: {env_path}")
         if not get_yes_no("Do you want to overwrite it?", default=False):
-            print("\n❌ Setup cancelled.")
+            print("\nSetup cancelled.")
             sys.exit(0)
         
         # Backup existing .env
-        backup_path = env_path.with_suffix('.env.backup')
+        backup_path = env_path.parent / f"{env_path.name}.backup"
+        # Remove old backup if it exists
+        if backup_path.exists():
+            backup_path.unlink()
         env_path.rename(backup_path)
         print(f"✓ Backup created at: {backup_path}")
     
@@ -130,8 +133,8 @@ DEBUG={config['debug']}
 
 def create_env_example():
     """Create .env.example file if it doesn't exist."""
-    # Get project root directory (parent of scripts directory)
-    project_root = Path(__file__).parent.parent
+    # Get project root directory (where setup.py is located)
+    project_root = Path(__file__).parent
     env_example_path = project_root / '.env.example'
     
     if env_example_path.exists():
@@ -159,7 +162,7 @@ def main():
     print("file with your credentials securely.\n")
     
     if not get_yes_no("Do you want to continue?", default=True):
-        print("\n❌ Setup cancelled.")
+        print("\nSetup cancelled.")
         sys.exit(0)
     
     config = {}
@@ -178,7 +181,7 @@ def main():
             config['moodle_url'] = moodle_url.rstrip('/')
             break
         else:
-            print("⚠️  URL must start with http:// or https://")
+            print("URL must start with http:// or https://")
     
     # Request Moodle token
     print("\nTo get your Moodle token:")
@@ -190,7 +193,7 @@ def main():
     config['moodle_token'] = getpass("Moodle authentication token (hidden): ").strip()
     
     if not config['moodle_token']:
-        print("\n❌ Token is required. Setup cancelled.")
+        print("\nToken is required. Setup cancelled.")
         sys.exit(1)
     
     # Server configuration
@@ -212,7 +215,7 @@ def main():
             config['log_level'] = log_level
             break
         else:
-            print("⚠️  Invalid level. Choose: DEBUG, INFO, WARNING or ERROR")
+            print("Invalid level. Choose: DEBUG, INFO, WARNING or ERROR")
     
     config['debug'] = 'true' if get_yes_no(
         "\nEnable debug mode?",
@@ -227,7 +230,7 @@ def main():
     print(f"Debug:          {config['debug']}")
     
     if not get_yes_no("\nDo you confirm this configuration?", default=True):
-        print("\n❌ Setup cancelled.")
+        print("\nSetup cancelled.")
         sys.exit(0)
     
     # Create files
@@ -242,7 +245,7 @@ def main():
     print("1. Install dependencies: pip install -r requirements.txt")
     print("2. Run tests: pytest")
     print("3. Check README.md for usage instructions")
-    print("\n⚠️  IMPORTANT: The .env file contains sensitive information.")
+    print("\nIMPORTANT: The .env file contains sensitive information.")
     print("   DO NOT share it or upload it to public repositories.")
     print("\n" + "=" * 60 + "\n")
 
@@ -251,8 +254,8 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n\n❌ Setup cancelled by user.")
+        print("\n\nSetup cancelled by user.")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n❌ Error during setup: {e}")
+        print(f"\n\nError during setup: {e}")
         sys.exit(1)
