@@ -323,6 +323,69 @@ class EnrolledUsersOption(BaseModel):
 
         return options
 
+class ManualEnrolment(BaseModel):
+    """Represents a manual enrolment operation for a user in a course.
+
+    Used with enrol_manual_enrol_users to manually enrol users.
+    """
+    roleid: int = Field(
+        ...,
+        description="Role ID to assign to the user in the course"
+    )
+    userid: int = Field(
+        ...,
+        description="User ID to enrol"
+    )
+    courseid: int = Field(
+        ...,
+        description="Course ID in which to enrol the user"
+    )
+    timestart: Optional[int] = Field(
+        default=None,
+        description="Enrolment start timestamp. 0 means immediate or use default configuration"
+    )
+    timeend: Optional[int] = Field(
+        default=None,
+        description="Enrolment end timestamp. 0 means no time restriction"
+    )
+    suspend: Optional[int] = Field(
+        default=None,
+        description="Set to 1 to create enrolment in suspended (inactive) state. 0 for active enrolment"
+    )
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
+
+        Removes None fields to avoid sending unnecessary data to the API.
+        """
+        return self.model_dump(exclude_none=True)
+
+
+class ManualUnenrolment(BaseModel):
+    """Represents a manual unenrolment operation for a user from a course.
+
+    Used with enrol_manual_unenrol_users to manually unenrol users.
+    """
+    userid: int = Field(
+        ...,
+        description="User ID to unenrol"
+    )
+    courseid: int = Field(
+        ...,
+        description="Course ID from which to unenrol the user"
+    )
+    roleid: Optional[int] = Field(
+        default=None,
+        description="Specific role ID to remove. If not specified, all roles will be removed (complete unenrolment)"
+    )
+
+    def to_moodle_dict(self) -> dict[str, Any]:
+        """Converts the model to a dictionary compatible with the Moodle API.
+
+        Removes None fields to avoid sending unnecessary data to the API.
+        """
+        return self.model_dump(exclude_none=True)
+
 # ============================================================================
 # User Models
 # ============================================================================
@@ -634,66 +697,5 @@ class StudentGrade(BaseModel):
         return self.model_dump(exclude_none=True)
 
 
-class ManualEnrolment(BaseModel):
-    """Represents a manual enrolment operation for a user in a course.
 
-    Used with enrol_manual_enrol_users to manually enrol users.
-    """
-    roleid: int = Field(
-        ...,
-        description="Role ID to assign to the user in the course"
-    )
-    userid: int = Field(
-        ...,
-        description="User ID to enrol"
-    )
-    courseid: int = Field(
-        ...,
-        description="Course ID in which to enrol the user"
-    )
-    timestart: Optional[int] = Field(
-        default=None,
-        description="Enrolment start timestamp. 0 means immediate or use default configuration"
-    )
-    timeend: Optional[int] = Field(
-        default=None,
-        description="Enrolment end timestamp. 0 means no time restriction"
-    )
-    suspend: Optional[int] = Field(
-        default=None,
-        description="Set to 1 to create enrolment in suspended (inactive) state. 0 for active enrolment"
-    )
-
-    def to_moodle_dict(self) -> dict[str, Any]:
-        """Converts the model to a dictionary compatible with the Moodle API.
-
-        Removes None fields to avoid sending unnecessary data to the API.
-        """
-        return self.model_dump(exclude_none=True)
-
-
-class ManualUnenrolment(BaseModel):
-    """Represents a manual unenrolment operation for a user from a course.
-
-    Used with enrol_manual_unenrol_users to manually unenrol users.
-    """
-    userid: int = Field(
-        ...,
-        description="User ID to unenrol"
-    )
-    courseid: int = Field(
-        ...,
-        description="Course ID from which to unenrol the user"
-    )
-    roleid: Optional[int] = Field(
-        default=None,
-        description="Specific role ID to remove. If not specified, all roles will be removed (complete unenrolment)"
-    )
-
-    def to_moodle_dict(self) -> dict[str, Any]:
-        """Converts the model to a dictionary compatible with the Moodle API.
-
-        Removes None fields to avoid sending unnecessary data to the API.
-        """
-        return self.model_dump(exclude_none=True)
 

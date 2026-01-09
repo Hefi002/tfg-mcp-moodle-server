@@ -10,11 +10,9 @@ logger = get_logger(__name__)
 def flatten_params(params: dict[str, Any], parent_key: str = '') -> dict[str, Any]:
     """Flatten nested dictionary/list structures to Moodle API format.
     
-    Converts nested structures like:
-        {"courses": [{"fullname": "Test", "categoryid": 1}]}
-    
-    To Moodle's expected format:
-        {"courses[0][fullname]": "Test", "courses[0][categoryid]": 1}
+    Converts nested structures from standard Python dict/list format to Moodle's
+    expected flattened format with bracketed keys. This is required for all Moodle
+    API requests that include arrays or nested objects.
     
     Args:
         params: Dictionary potentially containing nested dicts/lists
@@ -22,6 +20,11 @@ def flatten_params(params: dict[str, Any], parent_key: str = '') -> dict[str, An
     
     Returns:
         Flattened dictionary with Moodle-formatted keys
+
+    Example:
+
+        Input: {"courses": [{"fullname": "Test", "categoryid": 1}]}
+        Output: {"courses[0][fullname]": "Test", "courses[0][categoryid]": 1}
     """
     items = []
     
@@ -45,10 +48,15 @@ def flatten_params(params: dict[str, Any], parent_key: str = '') -> dict[str, An
 
 
 class MoodleClient:
-    """Client for interacting with Moodle Web Services API."""
+    """Client for interacting with Moodle Web Services API.
+    
+    Provides methods for all implemented Moodle webservice functions, handling
+    request formatting, HTTP communication, and response parsing. Each method
+    corresponds to a specific Moodle webservice function.
+    """
 
     def __init__(self, base_url: str, token: str):
-        """Initialize Moodle client.
+        """Initialize Moodle client with connection parameters.
 
         Args:
             base_url: Base URL of Moodle instance (e.g., http://localhost:8000)
@@ -64,19 +72,22 @@ class MoodleClient:
             function_name: str,
             **params: Any
     ) -> dict[str, Any] | list[dict[str, Any]]:
-        """Call a Moodle web service function (private use only).
-        Manages most error handling from api calls.
+        """Call a Moodle web service function (internal use only).
+        
+        Makes HTTP POST request to Moodle API endpoint with authentication and formatting.
+        Handles parameter flattening, response validation, and error checking. This method
+        is the central point for all Moodle API communication.
 
         Args:
             function_name: Name of the Moodle web service function
             **params: Function parameters as keyword arguments
 
         Returns:
-            Response data from Moodle API
+            Response data from Moodle API (dict, list, str, int, or None depending on function)
 
         Raises:
-            httpx.HTTPError: If the request fails
-            ValueError: If Moodle returns an error
+            httpx.HTTPError: If the HTTP request fails
+            ValueError: If Moodle returns an error response or unexpected data type
         """
         # Build request parameters
         request_params = {
@@ -125,13 +136,17 @@ class MoodleClient:
 
     async def get_courses(self, courseids: list[int] | None = None) -> list[dict[str, Any]]:
         """Get courses from Moodle.
+        
+        Retrieves course information from the Moodle instance. Can fetch all courses
+        or specific courses by their IDs. Each course includes comprehensive metadata.
 
         Args:
             courseids: Optional list of course IDs to retrieve specific courses.
                       If None or empty, returns all courses.
 
         Returns:
-            List of course dictionaries
+            List of course dictionaries containing course metadata such as id, shortname,
+            fullname, categoryid, summary, format, visibility, dates, and other fields
         """
         params = {}
         if courseids:
@@ -144,12 +159,24 @@ class MoodleClient:
 
     async def create_courses(self, courses: list[Course]) -> list[dict[str, Any]]:
         """Create one or more courses in Moodle.
+        
+        Creates new course instances in the Moodle database. Each course must have
+        required fields (fullname, shortname, categoryid) and can include optional
+        configuration fields. Note that no users are enrolled by default.
+        
+        WARNING: When a course is created through this method, no user is enrolled
+        by default. You need to manually enroll users after creation using manual_enrol_users.
 
         Args:
-            courses: List of Course objects to create
+            courses: List of Course objects to create. Each Course must have:
+                    Required fields:
+                    - fullname: Full course name
+                    - shortname: Unique short name
+                    - categoryid: Category ID (must be > 0)
+                    Optional fields include summary, format, visible, dates, grading options, etc.
 
         Returns:
-            List of created course dictionaries with their assigned IDs
+            List of created course dictionaries with their assigned IDs and all fields
         """
         # Convert Course models to dictionaries
         courses_data = [course.to_moodle_dict() for course in courses]
@@ -164,12 +191,22 @@ class MoodleClient:
 
     async def update_courses(self, courses: list[CourseUpdate]) -> dict[str, Any]:
         """Update one or more courses in Moodle.
+        
+        Modifies existing course configuration. Only specified fields are updated;
+        other fields remain unchanged. Useful for bulk course updates or single field changes.
 
         Args:
-            courses: List of CourseUpdate objects with course ID and fields to update
+            courses: List of CourseUpdate objects with course ID and fields to update.
+                    Each CourseUpdate must have:
+                    Required field:
+                    - id: Course ID to update (must be > 0)
+                    
+                    Optional fields (only specify what you want to change):
+                    - fullname, shortname, categoryid, summary, format, visible, dates,
+                      grading options, and any other course field
 
         Returns:
-            Result dictionary (usually contains warnings if any)
+            Result dictionary (usually contains warnings array if any issues occurred)
         """
         # Convert CourseUpdate models to dictionaries
         courses_data = [course.to_moodle_dict() for course in courses]
@@ -184,12 +221,20 @@ class MoodleClient:
 
     async def delete_courses(self, courseids: list[int]) -> dict[str, Any]:
         """Delete one or more courses from Moodle.
+        
+        Permanently removes courses from the Moodle instance. This action cannot be undone
+        and will delete all course content, enrollments, and related data.
+        
+        WARNING: This action cannot be undone!
 
         Args:
-            courseids: List of course IDs to delete
+            courseids: List of course IDs to delete. Each ID must be a valid course ID
+                      that exists in the Moodle instance.
 
         Returns:
-            Result dictionary (usually contains warnings if any)
+            Result dictionary containing:
+            - warnings: Array of warning messages if any issues occurred during deletion
+                       (e.g., if a course ID doesn't exist or user lacks permissions)
         """
         result = await self._call_function(
             "core_course_delete_courses",
@@ -204,23 +249,30 @@ class MoodleClient:
         courseid: int, 
         options: CourseContentsOption | None = None
     ) -> list[dict[str, Any]]:
-        """Get course contents (sections and modules).
+        """Get course contents (sections and modules) from Moodle.
+        
+        Retrieves the complete course structure including all sections and their modules
+        (activities and resources). Can be filtered using options to retrieve only specific
+        sections, modules, or module types.
 
         Args:
             courseid: Course ID to get contents from
             options: Optional CourseContentsOption object to filter results.
                     Available filters:
-                    - excludemodules: Do not return modules, return only sections
-                    - excludecontents: Do not return module contents (files)
-                    - includestealthmodules: Return stealth modules for students
-                    - sectionid: Return only this section
-                    - sectionnumber: Return only this section with number
-                    - cmid: Return only this module information
-                    - modname: Return only modules with this name
-                    - modid: Return only the module with this id
+                    - excludemodules: Don't return modules, only sections
+                    - excludecontents: Don't return module contents (files)
+                    - includestealthmodules: Include stealth modules for students
+                    - sectionid: Return only specific section by ID
+                    - sectionnumber: Return only section by its number/order
+                    - cmid: Return only specific course module by ID
+                    - modname: Return only modules of specific type (e.g., "forum", "assign")
+                    - modid: Return only module with specific ID (use with modname)
 
         Returns:
-            List of section dictionaries containing course structure and modules
+            List of section dictionaries, each containing:
+            - Section information (id, name, summary, etc.)
+            - List of modules (activities) in each section
+            - Module contents (files, URLs, etc.) if not excluded
         """
         params: dict[str, Any] = {"courseid": courseid}
         
@@ -237,23 +289,20 @@ class MoodleClient:
         return []
 
     async def view_course(self, courseid: int, sectionnumber: int = 0) -> dict[str, Any]:
-        """Notify Moodle that a course/section was viewed (core_course_view_course).
-
-        Calls the Moodle web service function `core_course_view_course` to inform
-        Moodle that a course (or a specific section) has been viewed. This is
-        primarily used to log the view action on the Moodle side. The method
-        returns the raw Moodle response, which typically contains a `status`
-        field and optionally a list of `warnings`.
+        """Log that the course was viewed.
+        
+        Notifies Moodle that a course or specific section has been viewed, triggering
+        activity logs and completion tracking. This is used to track user engagement.
 
         Args:
-            courseid: ID of the course to view (required).
-            sectionnumber: Section number to view within the course (defaults to 0).
+            courseid: ID of the course that was viewed (required).
+            sectionnumber: Section number within the course that was viewed
+                          (defaults to 0, which is the main page of the course).
 
         Returns:
-            A dictionary with the Moodle response. Expected keys:
-            - `status` (int/bool): operation success indicator
-            - `warnings` (optional list): any warnings generated by the call
-            If the API returns an unexpected type, an empty dict is returned.
+            Dictionary with the Moodle response. Expected to contain:
+            - status: Operation success indicator
+            - warnings: List of warning objects (optional)
         """
         params: dict[str, Any] = {
             "courseid": courseid,
@@ -276,21 +325,19 @@ class MoodleClient:
         offset: int = 0,
         sort: str | None = None
     ) -> list[dict[str, Any]]:
-        """Get the list of courses a user has accessed by recency (recent first).
+        """Get the list of courses a user accessed by recency, most recent first.
+        
+        Retrieves courses ordered by last access time. Useful for displaying recently
+        accessed courses in dashboards or navigation menus.
 
-        Calls the `core_course_get_recent_courses` web service function.
-
-        Arguments:
-            userid (Optional): User ID. If 0 (default) or omitted, the current
-                authenticated user is used.
-            limit (Optional): Limit the number of results. 0 (default) returns
-                all available courses.
-            offset (Optional): Offset for courses.
-            sort (Optional): Sort key (e.g. "fullname", "shortname").
+        Args:
+            userid: User ID. If 0 (default), the requesting user is used.
+            limit: Maximum number of results. 0 returns all courses.
+            offset: Result offset for pagination.
+            sort: Field to sort by (e.g., "fullname", "shortname").
 
         Returns:
-            A list of course dictionaries. Returns an empty list if the response
-            is not a list.
+            List of recent course dictionaries ordered by access time
         """
         params: dict[str, Any] = {}
 
@@ -315,85 +362,36 @@ class MoodleClient:
         return []
 
     async def close(self) -> None:
-        """Close the HTTP client."""
+        """Close the HTTP client connection.
+        
+        Properly closes the HTTP client to release resources. Should be called when
+        the MoodleClient is no longer needed, typically in cleanup/shutdown procedures.
+        
+        Returns:
+            None
+        """
         await self.client.aclose()
 
     async def get_course_module(self, cmid: int) -> dict[str, Any]:
         """Get detailed information about a specific course module.
-
-        Calls Moodle webservice function `core_course_get_course_module`.
-        Returns comprehensive information about a course module (activity or resource),
-        including identification, visibility, completion, grading settings, and more.
+        
+        Retrieves comprehensive metadata about a course module (activity or resource),
+        including identification, visibility, completion settings, grading configuration,
+        group settings, and more.
 
         Args:
             cmid: Course module ID (required).
 
         Returns:
             Dictionary containing:
-            - cm: Course module object with detailed information:
-              Identification and Location:
-              * id: Course module ID
-              * course: Course ID
-              * module: Module type ID in database
-              * modname: Module component name (e.g., 'forum', 'assign', 'quiz')
-              * instance: Specific activity/resource instance ID
-              * name: Activity name
-              * section: Section ID
-              * sectionnum: Section number (visible order)
-              * added: Timestamp when added (optional)
-              * idnumber: Module identification number (optional)
-
-              Visibility and Access:
-              * visible: 1 if visible to students (optional)
-              * visibleoncoursepage: 1 if visible on course page (optional)
-              * visibleold: Previous visibility state (optional)
-              * availability: Availability configuration in JSON format (optional)
-              * downloadcontent: Value indicating if content is downloadable (optional)
-              * showdescription: 1 if description should be shown on course page (optional)
-
-              Groups:
-              * groupmode: Group mode (0=NOGROUPS, 1=SEPARATEGROUPS, 2=VISIBLEGROUPS)
-              * groupingid: Assigned grouping ID
-
-              Completion:
-              * completion: Completion status (0=disabled, 1=enabled, 2=enabled with conditions)
-              * completionexpected: Timestamp when completion is expected (optional)
-              * completionview: 1 if viewing activity is required for completion (optional)
-              * completiongradeitemnumber: Grade item number used for completion (optional)
-              * completionpassgrade: 1 if passing grade required for completion (optional)
-
-              Grading:
-              * grade: Maximum grade (numeric) or scale ID (optional)
-              * gradepass: Minimum passing grade (as numeric string) (optional)
-              * gradecat: Grade category ID (optional)
-              * scale: Scale items (if scale is used), comma-separated list (optional)
-              * advancedgrading: List of advanced grading configurations (rubrics, guides) (optional)
-                Each contains: area, method
-              * outcomes: List of linked learning outcomes (optional)
-                Each contains: id, name, scale
-
-              Format and Presentation:
-              * indent: Indentation level (optional)
-              * score: Score (system-specific purpose) (optional)
-
-            - warnings: List of warning objects (optional):
-              * item, itemid, warningcode, message
-
-        Examples:
-            # Get information about a specific course module
-            module_info = await get_course_module(cmid=42)
-            print(f"Module: {module_info['cm']['name']}")
-            print(f"Type: {module_info['cm']['modname']}")
-            print(f"Visible: {module_info['cm'].get('visible', 0)}")
-
-            # Check completion settings
-            cm = module_info['cm']
-            if cm['completion'] > 0:
-                print("Completion tracking is enabled")
-                if cm.get('completionview'):
-                    print("  - Requires viewing the activity")
-                if cm.get('completionpassgrade'):
-                    print("  - Requires passing grade")
+            - cm: Course module object with complete information:
+                * Identification: id, course, module, modname, instance, name, section, etc.
+                * Visibility: visible, visibleoncoursepage, availability, etc.
+                * Groups: groupmode, groupingid
+                * Completion: completion, completionview, completionpassgrade, etc.
+                * Grading: grade, gradepass, gradecat, scale, advancedgrading, outcomes
+                * Format: indent, score
+            - warnings: List of warning objects (optional)
         """
         result = await self._call_function(
             "core_course_get_course_module",
@@ -409,15 +407,19 @@ class MoodleClient:
     # ============================================================================
 
     async def get_course_enrolment_methods(self, courseid: int) -> list[dict[str, Any]]:
-        """Get enrolment methods available for a given course.
-
-        Calls Moodle webservice function `core_enrol_get_course_enrolment_methods`.
+        """Get enrolment methods available for a course.
+        
+        Retrieves the list of enrolment methods (plugins) configured for a specific course,
+        including their status and configuration.
+        
+        WARNING: Moodle currently only returns [] for this call, so shouldn't be used.
 
         Args:
-            courseid: ID del curso para el que se solicitan los métodos de matriculación.
+            courseid: ID of the course (required).
 
         Returns:
-            Lista de objetos con la información de las instancias de enrol (o lista vacía).
+            List of objects describing the course's enrolment instances. Each contains:
+            - id, courseid, type, name, status, and other enrolment method fields
         """
 
         result = await self._call_function(
@@ -434,17 +436,22 @@ class MoodleClient:
         options: EnrolledUsersOption | None = None
     ) -> list[dict[str, Any]]:
         """Get list of users enrolled in a course.
-
-        Calls Moodle webservice function `core_enrol_get_enrolled_users`.
+        
+        Retrieves all users enrolled in a course with their profile information, roles,
+        and enrolment status. Can be filtered by capability, group, active status, and more.
 
         Args:
             courseid: Course ID (required).
             options: Optional EnrolledUsersOption object to filter results.
                     Available filters:
                     - withcapability: Return only users with this capability
+                      (requires moodle/role:review permission)
                     - groupid: Return only users in this group
+                      (requires moodle/site:accessallgroups if querying user not in group)
                     - onlyactive: 1 to return only users with active enrolments
+                      (requires moodle/course:enrolreview, incompatible with onlysuspended)
                     - onlysuspended: 1 to return only suspended users
+                      (requires moodle/course:enrolreview, incompatible with onlyactive)
                     - userfields: Comma-separated list of user fields to return
                     - limitfrom: SQL offset for pagination
                     - limitnumber: Maximum number of users to return
@@ -453,14 +460,11 @@ class MoodleClient:
 
         Returns:
             List of enrolled user dictionaries. Each user object contains:
-            - id: User ID
-            - fullname: Full name
-            - username, firstname, lastname, email (if requested)
-            - profileimageurl, profileimageurlsmall (if available)
-            - customfields: List of custom profile fields
-            - groups: List of course groups the user belongs to
-            - roles: List of user roles in this course
-            - And other optional fields depending on userfields parameter
+            - id, fullname, username, firstname, lastname, email (optional)
+            - profileimageurl, profileimageurlsmall (optional)
+            - customfields: List of custom profile fields (optional)
+            - groups: List of course groups the user belongs to (optional)
+            - roles: List of user roles in this course (optional)
         """
         params: dict[str, Any] = {"courseid": courseid}
 
@@ -479,11 +483,12 @@ class MoodleClient:
 
     async def manual_enrol_users(self, enrolments: list[ManualEnrolment]) -> dict[str, Any]:
         """Manually enrol users in courses.
-
-        Calls Moodle webservice function `enrol_manual_enrol_users`.
+        
+        Performs manual enrolment of one or more users in courses. Each enrolment
+        operation specifies a user, course, role, and optional time restrictions.
 
         Args:
-            enrolments: List of ManualEnrolment objects. Each enrolment must have:
+            enrolments: List of ManualEnrolment objects. Each must have:
                        Required fields:
                        - roleid: Role ID to assign to the user
                        - userid: User ID to enrol
@@ -495,7 +500,7 @@ class MoodleClient:
                        - suspend: 1 to create suspended enrolment, 0 for active
 
         Returns:
-            Result dictionary. An empty result indicates success.
+            Result dictionary. An empty result ({}) indicates success.
             On error, raises an exception (e.g., invalid_parameter_exception).
         """
         # Convert ManualEnrolment models to dictionaries
@@ -515,13 +520,12 @@ class MoodleClient:
 
     async def manual_unenrol_users(self, enrolments: list[ManualUnenrolment]) -> dict[str, Any]:
         """Manually unenrol users from courses.
-
-        Calls Moodle webservice function `enrol_manual_unenrol_users`.
-        Removes user enrolments from courses. Can remove specific roles or
-        completely unenrol the user by removing all roles.
+        
+        Removes user enrolments from courses. Can remove specific roles or completely
+        unenrol the user by removing all roles. This operation is permanent.
 
         Args:
-            enrolments: List of ManualUnenrolment objects. Each unenrolment must have:
+            enrolments: List of ManualUnenrolment objects. Each must have:
                        Required fields:
                        - userid: User ID to unenrol
                        - courseid: Course ID from which to unenrol the user
@@ -531,21 +535,8 @@ class MoodleClient:
                                 all roles will be removed (complete unenrolment)
 
         Returns:
-            Result dictionary. An empty result ({}) indicates success.
-            On error, raises an exception (e.g., invalid_parameter_exception).
-
-        Examples:
-            # Completely unenrol user 5 from course 10 (remove all roles)
-            unenrolments = [ManualUnenrolment(userid=5, courseid=10)]
-
-            # Remove only specific role (e.g., student role 5) for user 5 in course 10
-            unenrolments = [ManualUnenrolment(userid=5, courseid=10, roleid=5)]
-
-            # Unenrol multiple users
-            unenrolments = [
-                ManualUnenrolment(userid=5, courseid=10),
-                ManualUnenrolment(userid=6, courseid=10)
-            ]
+            Result dictionary. An empty dictionary ({}) indicates success.
+            On error, an exception is raised (e.g., invalid_parameter_exception).
         """
         # Convert ManualUnenrolment models to dictionaries
         enrolments_data = [enrolment.to_moodle_dict() for enrolment in enrolments]
@@ -568,11 +559,12 @@ class MoodleClient:
 
     async def create_users(self, users: list[UserCreate]) -> list[dict[str, Any]]:
         """Create one or more users in Moodle.
-
-        Calls Moodle webservice function `core_user_create_users`.
+        
+        Creates new user accounts in the Moodle instance. Each user must have unique
+        username and email. Password can be auto-generated or specified manually.
 
         Args:
-            users: List of UserCreate objects. Each user must have:
+            users: List of UserCreate objects. Each must have:
                   Required fields:
                   - username: Username (unique, follows Moodle security policy)
                   - firstname: First name(s) of the user
@@ -585,17 +577,10 @@ class MoodleClient:
                   
                   Common optional fields:
                   - auth: Authentication plugin (default: 'manual')
-                  - idnumber: Arbitrary ID code
-                  - lang: Language code (default: 'en')
-                  - calendartype: Calendar type (default: 'gregorian')
-                  - city, country, timezone: Location fields
-                  - maildisplay, mailformat: Email settings
-                  - description: Profile description
-                  - institution, department: Organizational fields
-                  - phone1, phone2, address: Contact fields
-                  - theme: Theme name
-                  - customfields: List of custom profile fields
-                  - preferences: List of user preferences
+                  - idnumber, lang, calendartype, city, country, timezone
+                  - maildisplay, mailformat, description
+                  - institution, department, phone1, phone2, address
+                  - theme, customfields, preferences
 
         Returns:
             List of created user dictionaries. Each contains:
@@ -616,46 +601,31 @@ class MoodleClient:
 
     async def get_users(self, criteria: list[UserSearchCriteria]) -> dict[str, Any]:
         """Search for users matching specified criteria.
-
-        Calls Moodle webservice function `core_user_get_users`.
+        
+        Searches for users in Moodle that match the given search criteria.
+        Multiple criteria are combined with AND operator. Supports wildcards.
 
         Args:
             criteria: List of UserSearchCriterion objects (key/value pairs).
-                     Each criterion must have:
-                     - key: User column to search by:
-                       * 'id': Match user ID (value must be numeric string)
-                       * 'lastname': Last name (can use '%' as wildcard)
-                       * 'firstname': First name (can use '%' as wildcard)
-                       * 'idnumber': ID number
-                       * 'username': Username
-                       * 'email': Email (can use '%' as wildcard)
-                       * 'auth': Authentication plugin (e.g., 'manual', 'ldap')
-                     - value: Value to search for (cannot be empty)
-                     
-                     Notes:
-                     - Each key must be unique
-                     - Search uses AND operator between valid criteria
-                     - Invalid criteria are ignored
-                     - Empty criteria not recommended (can be very slow)
+                Each criterion must have:
+                - key: User column to search by:
+                    * 'id': Match user ID (value must be numeric string)
+                    * 'lastname': Last name (can use '%' as wildcard)
+                    * 'firstname': First name (can use '%' as wildcard)
+                    * 'idnumber': ID number
+                    * 'username': Username
+                    * 'email': Email (can use '%' as wildcard)
+                    * 'auth': Authentication plugin (e.g., 'manual', 'ldap')
+                - value: Value to search for (cannot be empty)
+
+                NOTE: Each key must be unique. Search uses AND operator between
+                valid criteria. Use '%' as wildcard for text fields.
 
         Returns:
             Dictionary containing:
-            - users: List of user dictionaries found. Each user contains:
-              * id: User ID
-              * username, firstname, lastname (optional)
-              * fullname: Full name
-              * email (optional)
-              * auth: Authentication plugin (optional)
-              * suspended: 1 if suspended, 0 if active (optional)
-              * confirmed: 1 if confirmed (optional)
-              * idnumber, institution, department (optional)
-              * city, country (optional)
-              * profileimageurl, profileimageurlsmall: Profile images
-              * customfields: List of custom fields (optional)
-              * preferences: List of preferences (optional)
-              * And other optional fields (phone1, phone2, lang, timezone, etc.)
+            - users: List of user dictionaries found with fields like id, username,
+            firstname, lastname, fullname, email, suspended, confirmed, and more
             - warnings: List of warning objects (optional)
-              * item, itemid, warningcode, message
         """
         # Convert UserSearchCriterion models to dictionaries
         criteria_data = [criterion.to_moodle_dict() for criterion in criteria]
@@ -671,46 +641,27 @@ class MoodleClient:
 
     async def get_users_courses(self, userid: int, returnusercount: int = 1) -> list[dict[str, Any]]:
         """Get list of courses where a user is enrolled.
-
-        Calls Moodle webservice function `core_enrol_get_users_courses`.
+        
+        Returns all courses in which the specified user is enrolled, optionally including
+        the count of enrolled users in each course for better context.
 
         Args:
             userid: User ID (required).
             returnusercount: Include enrolled user count in each course.
                             1 (default) to include count.
-                            0 to omit and improve performance (especially for users
+                            0 to omit for better performance (useful when user is
                             enrolled in many large courses).
 
         Returns:
-            List of course dictionaries where the user is enrolled. Each course contains:
-            - id: Course ID
-            - shortname: Course short name
-            - fullname: Course full name
-            - displayname: Display name for lists (optional)
-            - idnumber: Course ID number
-            - visible: 1 if visible, 0 if hidden
-            - enrolledusercount: Number of enrolled users (optional, only if returnusercount=1)
-            - category: Category ID (optional)
-            - format: Course format (e.g., 'weeks', 'topics', 'site') (optional)
-            - summary: Course summary (optional)
-            - summaryformat: Summary format (1=HTML, 0=MOODLE, 2=PLAIN, 4=MARKDOWN) (optional)
-            - lang: Forced course language (optional)
-            - courseimage: Course image URL (optional)
-            - startdate, enddate: Course dates (timestamps) (optional)
-            - timemodified: Last modification timestamp (optional)
-            - enablecompletion: 1 if completion tracking enabled (optional)
-            - completionhascriteria: 1 if completion criteria set (optional)
-            - completionusertracked: 1 if user is tracked for completion (optional)
-            - progress: User's progress percentage (optional)
-            - completed: 1 if user completed the course (optional)
-            - lastaccess: User's last access timestamp (optional)
-            - isfavourite: 1 if user marked course as favourite (optional)
-            - hidden: 1 if user hid course from dashboard (optional)
-            - marker: Course section marker (optional)
-            - showgrades: 1 if grades are shown (optional)
-            - showactivitydates: 1 if activity dates are shown
-            - showcompletionconditions: 1 if completion conditions are shown
-            - overviewfiles: List of overview files attached to course (optional)
+            List of course dictionaries where the user is enrolled. Each contains:
+            - id, shortname, fullname, displayname, idnumber, visible
+            - enrolledusercount: Number of enrolled users (only if returnusercount=1)
+            - category, format, summary, lang, courseimage
+            - startdate, enddate, timemodified
+            - enablecompletion, completionhascriteria, completionusertracked
+            - progress, completed, lastaccess, isfavourite, hidden
+            - showgrades, showactivitydates, showcompletionconditions
+            - overviewfiles: List of overview files (optional)
         """
         result = await self._call_function(
             "core_enrol_get_users_courses",
@@ -728,8 +679,9 @@ class MoodleClient:
 
     async def get_course_completion_status(self, courseid: int, userid: int) -> dict[str, Any]:
         """Get course completion status for a user.
-
-        Calls Moodle webservice function `core_completion_get_course_completion_status`.
+        
+        Returns the completion status of a user in a specific course, including all
+        completion criteria and their individual completion states.
 
         Args:
             courseid: Course ID (required).
@@ -738,21 +690,10 @@ class MoodleClient:
         Returns:
             Dictionary containing:
             - completionstatus: Completion status object:
-              * completed: 1 if course is complete, 0 otherwise
-              * aggregation: Aggregation method (1=ALL criteria, 2=ANY criteria)
-              * completions: List of completion criteria objects:
-                - type: Criterion type code (numeric)
-                - title: Criterion title
-                - status: Status as readable text (e.g., "Yes", "No", "50%")
-                - complete: 1 if complete, 0 if not
-                - timecompleted: Timestamp when completed (0 if not complete)
-                - details: Additional details object:
-                  * type: Criterion type description
-                  * criteria: Specific criterion description
-                  * requirement: Requirement description
-                  * status: Extended status description
-            - warnings: List of warning objects (optional):
-              * item, itemid, warningcode, message
+                * completed: 1 if course is complete, 0 otherwise
+                * aggregation: Aggregation method (1=ALL criteria, 2=ANY criteria)
+                * completions: List of completion criteria with their status
+            - warnings: List of warning objects (optional)
         """
         result = await self._call_function(
             "core_completion_get_course_completion_status",
@@ -766,8 +707,12 @@ class MoodleClient:
 
     async def get_activities_completion_status(self, courseid: int, userid: int) -> dict[str, Any]:
         """Get activities completion status for a user in a course.
-
-        Calls Moodle webservice function `core_completion_get_activities_completion_status`.
+        
+        Returns the completion status of all activities (modules) for a user in a specific
+        course, including detailed information about each activity's state and tracking settings.
+        
+        WARNING: If the user is not enrolled in the course, Moodle does not return an error,
+        but a list with all activities marked as incomplete (state=0).
 
         Args:
             courseid: Course ID (required).
@@ -775,32 +720,11 @@ class MoodleClient:
 
         Returns:
             Dictionary containing:
-            - statuses: List of activity completion status objects:
-              * cmid: Course module ID
-              * modname: Module type name (e.g., 'quiz', 'assign', 'forum')
-              * instance: Activity instance ID within the module
-              * state: Completion state:
-                - 0: Incomplete
-                - 1: Complete
-                - 2: Complete and passed
-                - 3: Complete and failed
-              * timecompleted: Timestamp when completed (0 if not complete)
-              * tracking: Completion tracking type:
-                - 0: None
-                - 1: Manual
-                - 2: Automatic
-              * overrideby: User ID who overrode the status, or null (optional)
-              * hascompletion: 1 if completion enabled for this activity (optional)
-              * isautomatic: 1 if activity tracks completion automatically (optional)
-              * istrackeduser: 1 if completion tracked for this user (optional)
-              * uservisible: 1 if activity is visible to user (optional)
-              * isoverallcomplete: 1 if overall completion should be marked complete (optional)
-              * valueused: If completion status affects another activity availability (optional)
-              * details: List of completion rule details (optional):
-                - rulename: Name of the rule
-                - rulevalue: Object with status and description
-            - warnings: List of warning objects (optional):
-              * item, itemid, warningcode, message
+            - statuses: List of activity completion status objects with fields like:
+                * cmid, modname, instance, state, timecompleted, tracking
+                * hascompletion, isautomatic, istrackeduser, uservisible
+                * details: List of completion rule details (optional)
+            - warnings: List of warning objects (optional)
         """
         result = await self._call_function(
             "core_completion_get_activities_completion_status",
@@ -818,9 +742,9 @@ class MoodleClient:
             completed: int
     ) -> dict[str, Any]:
         """Update activity completion status manually for the current user.
-
-        Calls Moodle webservice function `core_completion_update_activity_completion_status_manually`.
-        Only works for activities with manual completion tracking enabled.
+        
+        Manually marks an activity as complete or incomplete for the current user.
+        This only works for activities that have manual completion tracking enabled.
 
         Args:
             cmid: Course module ID (activity ID) (required).
@@ -831,16 +755,7 @@ class MoodleClient:
         Returns:
             Dictionary containing:
             - status: 1 if operation was successful, 0 if failed
-            - warnings: List of warning objects (optional):
-              * item: Item identifier (e.g., 'cmid')
-              * itemid: Item ID value
-              * warningcode: Warning code identifier
-              * message: Human-readable warning message
-
-              Common warnings:
-              - Activity does not have manual completion tracking enabled
-              - User does not have permission to update completion
-              - Activity or course module does not exist
+            - warnings: List of warning objects (optional) with details about failures
         """
         result = await self._call_function(
             "core_completion_update_activity_completion_status_manually",
@@ -867,32 +782,21 @@ class MoodleClient:
         itemdetails: GradeItemDetails | None = None
     ) -> int:
         """Update a grade item and associated student grades.
-
-        Calls Moodle webservice function `core_grades_update_grades`.
+        
+        Updates a grade item configuration and/or student grades for a specific activity
+        in Moodle. Can update item settings, grades, or both simultaneously.
 
         Args:
-            source: Source of the update (arbitrary identifier from calling component, e.g., 'my_script').
+            source: Source of the update (arbitrary identifier, e.g., 'my_script').
             courseid: Course ID (required).
             component: Component the activity belongs to (e.g., 'mod_quiz', 'mod_assign').
             activityid: ID of the activity instance (e.g., specific quiz ID).
             itemnumber: Grade item number for modules with multiple grades. Typically 0.
-            grades: List of StudentGrade objects with student grades to update/set (optional).
-                   Each grade must have:
-                   - studentid: Student ID
-                   - grade: Numeric grade (for scale items, must be scale option ID)
-                   - str_feedback: Feedback comment in plain text (optional)
-            itemdetails: GradeItemDetails object with grade item configuration to modify (optional).
-                        Available settings:
-                        - itemname: Name of the grade item
-                        - idnumber: Arbitrary identification number
-                        - gradetype: Grade type (0=None, 1=Value, 2=Scale, 3=Text)
-                        - grademax: Maximum grade allowed
-                        - grademin: Minimum grade allowed
-                        - scaleid: ID of custom scale (only if gradetype=2)
-                        - multfactor: Multiply all grades by this number
-                        - plusfactor: Add this value to all grades
-                        - deleted: Set to 1 to mark item as deleted
-                        - hidden: Set to 1 to hide the item
+            grades: List of StudentGrade objects with student grades to update (optional).
+                   Each grade must have studentid, grade, and optional str_feedback.
+            itemdetails: GradeItemDetails object with grade item config to modify (optional).
+                        Available settings: itemname, idnumber, gradetype, grademax, grademin,
+                        scaleid, multfactor, plusfactor, deleted, hidden.
 
         Returns:
             Result code:
@@ -932,21 +836,17 @@ class MoodleClient:
 
     async def get_gradeitems(self, courseid: int) -> dict[str, Any]:
         """Get grade items for a course.
-
-        Calls Moodle webservice function `core_grades_get_gradeitems`. For more extensive
-        info on each grade_item, consider using
+        
+        Returns all grade items (grade elements) configured in a specific course.
+        Grade items represent individual assessments, activities, or manual grade entries.
 
         Args:
             courseid: Course ID (required).
 
         Returns:
             Dictionary containing:
-            - gradeItems: List of grade item objects:
-              * id: Unique identifier string (not numeric DB ID, e.g., "mod_quiz_1234_0")
-              * itemname: Full name of the grade item
-              * category: Name of the grade category the item belongs to (optional)
-            - warnings: List of warning objects (optional):
-              * item, itemid, warningcode, message
+            - gradeItems: List of grade item objects with id, itemname, category (optional)
+            - warnings: List of warning objects (optional)
         """
         result = await self._call_function(
             "core_grades_get_gradeitems",
@@ -964,9 +864,10 @@ class MoodleClient:
             groupid: int = 0
     ) -> dict[str, Any]:
         """Get complete list of grade items and user grades in a course.
-
-        Calls Moodle webservice function `gradereport_user_get_grade_items`.
-        Returns the full grade report as shown in the "User report" view.
+        
+        Returns the full grade report as shown in the "User report" view in Moodle.
+        This provides a comprehensive view of all grade items and user grades,
+        including detailed information about each grade item and the user's performance.
 
         Args:
             courseid: Course ID (required).
@@ -977,56 +878,11 @@ class MoodleClient:
 
         Returns:
             Dictionary containing:
-            - usergrades: List of user objects with their grades:
-              * courseid: Course ID
-              * courseidnumber: Course ID number
-              * userid: User ID
-              * userfullname: User full name
-              * useridnumber: User ID number
-              * maxdepth: Maximum depth of grade category hierarchy
-              * gradeitems: List of grade item objects with user's grades:
-                - Identification:
-                  * id: Grade item ID
-                  * itemname: Item name
-                  * itemtype: Type (e.g., 'mod', 'category', 'course')
-                  * itemmodule: Module if activity (e.g., 'quiz', 'assign')
-                  * iteminstance: Activity instance ID
-                  * itemnumber: Item number (typically 0)
-                  * idnumber: Item identification number
-                  * categoryid: Grade category ID
-                  * cmid: Course module ID (if itemtype is 'mod') (optional)
-                - Configuration:
-                  * scaleid: Scale ID used
-                  * outcomeid: Outcome ID if applicable
-                  * weightraw: Raw weight (optional)
-                  * weightformatted: Formatted weight (optional)
-                  * grademin: Minimum possible grade (optional)
-                  * grademax: Maximum possible grade (optional)
-                  * locked: 1 if item is locked for user (optional)
-                - User's Grade:
-                  * graderaw: Raw grade (numeric value) (optional)
-                  * gradeformatted: Formatted grade for display (optional)
-                  * percentageformatted: Formatted percentage (optional)
-                  * lettergradeformatted: Formatted letter grade (optional)
-                  * rangeformatted: Formatted grade range (optional)
-                  * rank: User's rank in course for this item (optional)
-                - Grade Metadata:
-                  * status: Status (e.g., 'novalue', 'loaded') (optional)
-                  * gradedatesubmitted: Submission date timestamp (optional)
-                  * gradedategraded: Grading date timestamp (optional)
-                  * gradehiddenbydate: 1 if hidden by date (optional)
-                  * gradeishidden: 1 if grade is hidden (optional)
-                  * gradeislocked: 1 if grade is locked (optional)
-                  * gradeisoverridden: 1 if grade was overridden (optional)
-                  * gradeneedsupdate: 1 if grade needs update (optional)
-                - Feedback:
-                  * feedback: Feedback comments (optional)
-                  * feedbackformat: Format (1=HTML, 0=MOODLE, 2=PLAIN, 4=MARKDOWN) (optional)
-                - Statistics:
-                  * numusers: Number of users in course (optional)
-                  * averageformatted: Formatted item average (optional)
-            - warnings: List of warning objects (optional):
-              * item, itemid, warningcode, message
+            - usergrades: List of user objects with their grades. Each contains:
+                * courseid, userid, userfullname, useridnumber, maxdepth
+                * gradeitems: List of grade item objects with user's grades including
+                identification, configuration, user's grade, metadata, feedback, and statistics
+            - warnings: List of warning objects (optional)
         """
         params: dict[str, Any] = {"courseid": courseid}
 
@@ -1046,9 +902,10 @@ class MoodleClient:
 
     async def get_grade_tree(self, courseid: int) -> dict[str, Any]:
         """Get hierarchical grade structure (tree) for a course.
-
-        Calls Moodle webservice function `core_grades_get_grade_tree`.
+        
         Returns the complete gradebook structure for a course as a dictionary.
+        This includes the full hierarchy of grade categories, subcategories,
+        grade items, their relationships, weights, and aggregation settings.
 
         Args:
             courseid: Course ID (required).
@@ -1061,7 +918,6 @@ class MoodleClient:
             - Aggregation methods and weights
             - Grade scales and maximum/minimum values
             - Hidden/visible status of items
-            - And other gradebook configuration details
         """
         result = await self._call_function(
             "core_grades_get_grade_tree",
@@ -1091,8 +947,9 @@ class MoodleClient:
         itemid: int
     ) -> dict[str, Any]:
         """Get feedback data for a specific user's grade in a grade item.
-
-        Calls Moodle webservice function `core_grades_get_feedback`.
+        
+        Returns the feedback (comment) associated with a specific student's
+        grade for a particular grade item, along with related information.
 
         Args:
             courseid: Course ID (required).
@@ -1130,61 +987,37 @@ class MoodleClient:
 
     async def get_site_info(self) -> dict[str, Any]:
         """Get site information, current user details and available webservice functions.
-
-        Calls Moodle webservice function `core_webservice_get_site_info`.
-        Returns comprehensive information about the Moodle site, the authenticated user,
-        and the list of webservice functions available to this user.
-
-        Note:
-            The Moodle API function accepts a deprecated parameter `serviceshortnames`
-            which is ignored by the API. This parameter is not exposed in this method
-            as it serves no purpose.
+        
+        Retrieves comprehensive information about the Moodle site, the authenticated user,
+        and the list of webservice functions available to the current user/token.
+        This is useful for understanding the current user's capabilities, site configuration,
+        and what operations are available through the webservice.
+        
+        NOTE: The Moodle API function accepts a deprecated parameter `serviceshortnames`
+        which is ignored by the API. This parameter is not exposed in this method
+        as it serves no purpose.
 
         Returns:
             Dictionary containing extensive site and user information:
             
             User Information:
-            - userid: Current user ID
-            - username: Username
-            - firstname: First name
-            - lastname: Last name
-            - fullname: Full name
-            - userpictureurl: Public profile picture URL
-            - lang: Current user language
-            - userissiteadmin: 1 if user is site admin (optional)
-            - userhomepage: Default homepage (0=Site, 1=Dashboard, 4=Custom) (optional)
-            - userhomepageurl: Custom homepage URL if userhomepage is 4 (optional)
+            - userid, username, firstname, lastname, fullname, userpictureurl, lang
+            - userissiteadmin, userhomepage, userhomepageurl (optional)
             
             Site Information:
-            - sitename: Site name
-            - siteurl: Site URL
-            - siteid: Site course ID (optional)
-            - release: Moodle release number (e.g., "4.4.1") (optional)
-            - version: Moodle version (optional)
-            - mobilecssurl: Mobile custom CSS URL (optional)
-            - sitecalendartype: Site calendar type (optional)
-            - usercalendartype: User calendar type (optional)
-            - theme: Current theme for user (optional)
+            - sitename, siteurl, siteid, release, version (optional)
+            - mobilecssurl, sitecalendartype, usercalendartype, theme (optional)
             
             Capabilities and Limits:
-            - downloadfiles: 1 if user can download files (optional)
-            - uploadfiles: 1 if user can upload files (optional)
-            - usercanmanageownfiles: 1 if user can manage own files (optional)
-            - userquota: User storage quota in bytes (0 = unlimited) (optional)
-            - usermaxuploadfilesize: Max upload size in bytes (-1 = unlimited) (optional)
-            - limitconcurrentlogins: Number of concurrent sessions allowed (optional)
-            - usersessionscount: Number of active user sessions (optional)
-            - policyagreed: 1 if user agreed to all policies (optional)
+            - downloadfiles, uploadfiles, usercanmanageownfiles (optional)
+            - userquota, usermaxuploadfilesize, limitconcurrentlogins (optional)
+            - usersessionscount, policyagreed (optional)
             
             Webservice Functions:
-            - functions: List of available webservice function objects:
-              * name: Function name
-              * version: Component version
+            - functions: List of available webservice function objects with name and version
             
             Advanced Features:
-            - advancedfeatures: List of site advanced features status (optional):
-              * name: Feature name
-              * value: Usually 1 for enabled
+            - advancedfeatures: List of site advanced features and their status (optional)
             
             Access:
             - userprivateaccesskey: User private access key for file retrieval (optional)
@@ -1194,4 +1027,3 @@ class MoodleClient:
         if isinstance(result, dict):
             return result
         return {}
-

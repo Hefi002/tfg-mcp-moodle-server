@@ -1,12 +1,11 @@
 # MCP Protocol
-anthropic>=0.3.0        # Cliente oficial Anthropic
-websockets>=11.0.3      # Comunicación MCP
-aiohttp>=3.8.5          # HTTP asíncrono
+mcp>=1.0.0              # Model Context Protocol SDK
 
-# Moodle API
-requests>=2.31.0        # HTTP requests
+# HTTP Client
+httpx>=0.27.0           # Async HTTP client for Moodle API
 
-# Utilities
-python-dotenv>=1.0.0    # Variables de entorno
-pydantic>=2.3.0         # Validación de datos
-pyyaml>=6.0.1           # Configuración YAML
+# Data Validation
+pydantic>=2.3.0         # Data validation and models
+
+# Configuration
+python-dotenv>=1.0.0    # Environment variables management
