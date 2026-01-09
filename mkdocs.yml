@@ -1,7 +1,7 @@
 site_name: MCP Moodle Server
 site_description: Model Context Protocol server for Moodle API integration
-site_author: Your Name
-repo_url: https://github.com/yourusername/tfg-mcp-moodle-server
+site_author: Eric Herrero Espada
+repo_url: https://github.com/Hefi002/tfg-mcp-moodle-server.git
 repo_name: tfg-mcp-moodle-server
 
 theme:
