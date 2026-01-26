@@ -2,6 +2,17 @@
 
 A Model Context Protocol (MCP) server that connects AI agents with Moodle's API, enabling intelligent automation and integration with Learning Management Systems.
 
+##Security Notice
+
+This project was developed as a Final Degree Project with a focus on functionality and proof of concept. While fully operational, it has not undergone a comprehensive security audit. For production environments, please consider:
+
+- Implementing proper authentication and authorization mechanisms
+- Conducting a security review before deployment
+- Following your organization's security policies and best practices
+- Using appropriate rate limiting and access controls
+
+Feel free to fork this project and adapt it to your security requirements.
+
 ## Table of Contents
 
 - [Overview](#overview)
